@@ -940,6 +940,16 @@ class NoteEditorFragment :
                 Timber.w("Image uri is null")
             }
         }
+
+        // Auto-save when intent provides both EXTRA_SUBJECT and EXTRA_TEXT
+        if (caller == NoteEditorCaller.NOTEEDITOR_INTENT_ADD &&
+            !sourceText.isNullOrEmpty() &&
+            !sourceText!![0].isNullOrEmpty() &&
+            !sourceText!![1].isNullOrEmpty()
+        ) {
+            Timber.i("Auto-saving note: both subject and text provided via intent")
+            launchCatchingTask { saveNote() }
+        }
     }
 
     private val cameraLauncher =
