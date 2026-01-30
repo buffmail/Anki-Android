@@ -918,18 +918,15 @@ class NoteEditorFragment :
             )
         }
 
-        // don't open keyboard if not adding note
-        if (!addNote) {
-            requireActivity().window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
-        }
+        // don't open keyboard automatically
+        requireActivity().window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
 
-        // set focus to FieldEditText 'first' on startup like Anki desktop
+        // set text from search view if provided, but don't auto-focus
         if (editFields != null && !editFields!!.isEmpty()) {
             // EXTRA_TEXT_FROM_SEARCH_VIEW takes priority over other intent inputs
             if (!getTextFromSearchView.isNullOrEmpty()) {
                 editFields!!.first().setText(getTextFromSearchView)
             }
-            editFields!!.first().requestFocus()
         }
 
         if (caller == NoteEditorCaller.IMG_OCCLUSION) {

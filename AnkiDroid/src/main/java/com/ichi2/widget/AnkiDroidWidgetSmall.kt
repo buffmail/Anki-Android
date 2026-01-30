@@ -113,7 +113,6 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
             val mounted = AnkiDroidApp.isSdCardMounted
             if (!mounted) {
                 updateViews.setViewVisibility(R.id.widget_due, View.INVISIBLE)
-                updateViews.setViewVisibility(R.id.widget_eta, View.INVISIBLE)
                 updateViews.setViewVisibility(R.id.ankidroid_widget_small_finish_layout, View.GONE)
                 if (mountReceiver == null) {
                     mountReceiver =
@@ -146,10 +145,9 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
                 }
             } else {
                 // Compute the total number of cards due.
-                val (dueCardsCount, eta) = WidgetStatus.fetchSmall(context)
+                val (dueCardsCount, _) = WidgetStatus.fetchSmall(context)
                 if (dueCardsCount == 0) {
                     updateViews.setViewVisibility(R.id.ankidroid_widget_small_finish_layout, View.VISIBLE)
-                    updateViews.setViewVisibility(R.id.widget_eta, View.INVISIBLE)
                     updateViews.setViewVisibility(R.id.widget_due, View.INVISIBLE)
                 } else {
                     updateViews.setViewVisibility(R.id.ankidroid_widget_small_finish_layout, View.INVISIBLE)
@@ -159,18 +157,6 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
                         R.id.widget_due,
                         context.resources.getQuantityString(R.plurals.widget_cards_due, dueCardsCount, dueCardsCount),
                     )
-
-                    if (eta <= 0) {
-                        updateViews.setViewVisibility(R.id.widget_eta, View.INVISIBLE)
-                    } else {
-                        updateViews.setViewVisibility(R.id.widget_eta, View.VISIBLE)
-                        val etaText = if (Build.VERSION.SDK_INT >= 31) "⏱$eta" else "$eta"
-                        updateViews.setTextViewText(R.id.widget_eta, etaText)
-                        updateViews.setContentDescription(
-                            R.id.widget_eta,
-                            context.resources.getQuantityString(R.plurals.widget_eta, eta, eta),
-                        )
-                    }
                 }
             }
 
@@ -234,7 +220,6 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
                     text = (sqrt(width * 1.25 / height) * 18).toFloat()
                 }
                 updateViews.setTextViewTextSize(R.id.widget_due, TypedValue.COMPLEX_UNIT_SP, text)
-                updateViews.setTextViewTextSize(R.id.widget_eta, TypedValue.COMPLEX_UNIT_SP, text)
                 updateViews.setViewPadding(R.id.ankidroid_widget_text_layout, horizontal, vertical, horizontal, vertical)
             }
         }
