@@ -406,6 +406,7 @@ class ReviewerFragment :
                 binding.newCount.text = counts.new
                 binding.learnCount.text = counts.learn
                 binding.reviewCount.text = counts.review
+                binding.totalCount.text = (counts.new.toInt() + counts.learn.toInt() + counts.review.toInt()).toString()
 
                 val currentCount =
                     when (counts.activeQueue) {
@@ -423,6 +424,7 @@ class ReviewerFragment :
                 binding.newCount.isVisible = false
                 binding.learnCount.isVisible = false
                 binding.reviewCount.isVisible = false
+                binding.totalCount.isVisible = false
             }
         }
     }

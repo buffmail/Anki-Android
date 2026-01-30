@@ -180,6 +180,7 @@ open class Reviewer :
     private lateinit var textBarNew: TextView
     private lateinit var textBarLearn: TextView
     private lateinit var textBarReview: TextView
+    private lateinit var textBarTotal: TextView
     private lateinit var answerTimer: AnswerTimer
     private var prefHideDueCount = false
 
@@ -237,6 +238,7 @@ open class Reviewer :
         textBarNew = findViewById(R.id.new_number)
         textBarLearn = findViewById(R.id.learn_number)
         textBarReview = findViewById(R.id.review_number)
+        textBarTotal = findViewById(R.id.total_number)
         toolbar = findViewById(R.id.toolbar)
         micToolBarLayer = findViewById(R.id.mic_tool_bar_layer)
         processor = BindingMap(sharedPrefs(), ViewerCommand.entries, this)
@@ -1181,6 +1183,7 @@ open class Reviewer :
         textBarNew.text = newCount
         textBarLearn.text = lrnCount
         textBarReview.text = revCount
+        textBarTotal.text = (counts.new + counts.lrn + counts.rev).toString()
     }
 
     override fun fillFlashcard() {
@@ -1329,6 +1332,7 @@ open class Reviewer :
             textBarNew.visibility = View.GONE
             textBarLearn.visibility = View.GONE
             textBarReview.visibility = View.GONE
+            textBarTotal.visibility = View.GONE
         }
 
         // can't move this into onCreate due to mTopBarLayout
@@ -1344,6 +1348,7 @@ open class Reviewer :
             textBarNew.visibility = visible
             textBarLearn.visibility = visible
             textBarReview.visibility = visible
+            textBarTotal.visibility = visible
         }
     }
 
@@ -1356,6 +1361,7 @@ open class Reviewer :
             textBarNew.visibility = View.VISIBLE
             textBarLearn.visibility = View.VISIBLE
             textBarReview.visibility = View.VISIBLE
+            textBarTotal.visibility = View.VISIBLE
         }
     }
 
