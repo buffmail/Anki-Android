@@ -279,6 +279,7 @@ class NoteEditorFragment :
 
     // indicates which activity called Note Editor
     private var caller = NoteEditorCaller.NO_CALLER
+    private var autoSaveFromIntentAdd = false
     private var editFields: LinkedList<FieldEditText>? = null
     private var sourceText: Array<String?>? = null
     private val fieldState = FieldState.fromEditor(this)
@@ -948,6 +949,7 @@ class NoteEditorFragment :
             !sourceText!![1].isNullOrEmpty()
         ) {
             Timber.i("Auto-saving note: both subject and text provided via intent")
+            autoSaveFromIntentAdd = true
             launchCatchingTask { saveNote() }
         }
     }
@@ -1681,10 +1683,13 @@ class NoteEditorFragment :
         intent: Intent?,
     ) {
         requireActivity().apply {
-            if (intent != null) {
-                setResult(result, intent)
-            } else {
-                setResult(result)
+            // Avoid setting a result for auto-saved external intents; otherwise finishAffinity throws
+            if (!(autoSaveFromIntentAdd)) {
+                if (intent != null) {
+                    setResult(result, intent)
+                } else {
+                    setResult(result)
+                }
             }
             // ensure there are no orphans from possible edit previews
             CardTemplateNotetype.clearTempNoteTypeFiles()
@@ -1696,6 +1701,11 @@ class NoteEditorFragment :
             }
 
             Timber.i("Closing note editor")
+            if (autoSaveFromIntentAdd) {
+                Timber.i("Auto-save from intent add: finishing task")
+                finishAffinity()
+                return
+            }
 
             // Set the finish animation if there is one on the intent which created the activity
             val animation =
