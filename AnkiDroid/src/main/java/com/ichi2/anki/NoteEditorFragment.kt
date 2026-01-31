@@ -948,9 +948,16 @@ class NoteEditorFragment :
             !sourceText!![0].isNullOrEmpty() &&
             !sourceText!![1].isNullOrEmpty()
         ) {
-            Timber.i("Auto-saving note: both subject and text provided via intent")
-            autoSaveFromIntentAdd = true
-            launchCatchingTask { saveNote() }
+            // Sync UI fields into the note to run an accurate duplicate check
+            editFields?.forEach { updateField(it) }
+            val dupeCode = editorNote?.fieldsCheck(getColUnsafe)
+            if (dupeCode == NoteFieldsCheckResponse.State.DUPLICATE) {
+                Timber.i("Auto-save skipped: duplicate detected for first field")
+            } else {
+                Timber.i("Auto-saving note: both subject and text provided via intent")
+                autoSaveFromIntentAdd = true
+                launchCatchingTask { saveNote() }
+            }
         }
     }
 
@@ -1681,8 +1688,7 @@ class NoteEditorFragment :
     private fun closeNoteEditor(
         result: Int,
         intent: Intent?,
-    ) {
-        requireActivity().apply {
+    ) requireActivity().apply {
             // Avoid setting a result for auto-saved external intents; otherwise finishAffinity throws
             if (!(autoSaveFromIntentAdd)) {
                 if (intent != null) {
