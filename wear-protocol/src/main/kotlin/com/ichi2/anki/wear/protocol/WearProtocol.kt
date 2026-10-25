@@ -212,6 +212,11 @@ data class WatchDeck(
     /** 0 for top-level decks. */
     val depth: Int,
     val counts: WatchCounts,
+    /**
+     * All cards in the deck and its subdecks, due or not, including cards moved to a filtered
+     * deck for now. `null` from a phone app that doesn't send it.
+     */
+    val cardCount: Int? = null,
 )
 
 @Serializable

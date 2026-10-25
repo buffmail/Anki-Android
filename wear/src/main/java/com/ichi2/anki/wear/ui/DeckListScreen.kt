@@ -16,9 +16,11 @@
 
 package com.ichi2.anki.wear.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -33,6 +35,7 @@ import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.ListHeader
+import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
@@ -152,9 +155,26 @@ private fun DeckList(
                         } else {
                             ButtonDefaults.childButtonColors()
                         },
-                    label = { Text(deck.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                    secondaryLabel = { Text(countsText(deck.counts)) },
-                )
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            deck.name,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Text(countsText(deck.counts), style = MaterialTheme.typography.labelSmall)
+                    }
+                    // all cards in the deck, due or not
+                    deck.cardCount?.let { cardCount ->
+                        Text(
+                            cardCount.toString(),
+                            modifier = Modifier.align(Alignment.CenterVertically).padding(start = 8.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LocalContentColor.current.copy(alpha = 0.7f),
+                        )
+                    }
+                }
             }
         }
     }

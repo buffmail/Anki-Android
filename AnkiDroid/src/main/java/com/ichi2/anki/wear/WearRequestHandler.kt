@@ -289,6 +289,8 @@ object WearRequestHandler {
 
     private fun Collection.deckList(): WearResponse.Decks {
         val result = mutableListOf<WatchDeck>()
+        val tree = sched.deckDueTree()
+        val cardCounts = totalCardCounts(tree)
 
         fun visit(node: DeckNode) {
             val isHiddenDefaultDeck =
@@ -300,6 +302,7 @@ object WearRequestHandler {
                         name = node.lastDeckNameComponent,
                         depth = node.depth,
                         counts = WatchCounts(new = node.newCount, learn = node.lrnCount, review = node.revCount),
+                        cardCount = cardCounts[node.did] ?: 0,
                     ),
                 )
             }
@@ -308,8 +311,34 @@ object WearRequestHandler {
             }
         }
 
-        sched.deckDueTree().children.forEach(::visit)
+        tree.children.forEach(::visit)
         return WearResponse.Decks(result)
+    }
+
+    /**
+     * All cards of each deck in [tree], subdecks included, in one query. Like Anki's
+     * `decks.cardCount(did, includeSubdecks = true)`, a card moved to a filtered deck still
+     * counts in its home deck; a filtered deck counts the cards it holds now, and isn't added
+     * to its parent (those cards already count in their home deck).
+     */
+    private fun Collection.totalCardCounts(tree: DeckNode): Map<DeckId, Int> {
+        val own = mutableMapOf<DeckId, Int>()
+        db.query("SELECT did, odid, count() FROM cards GROUP BY did, odid").use { cursor ->
+            while (cursor.moveToNext()) {
+                val count = cursor.getInt(2)
+                own.merge(cursor.getLong(0), count, Int::plus)
+                val homeDeckId = cursor.getLong(1)
+                if (homeDeckId != 0L) own.merge(homeDeckId, count, Int::plus)
+            }
+        }
+        val totals = mutableMapOf<DeckId, Int>()
+
+        fun total(node: DeckNode): Int {
+            val childrenTotal = node.children.sumOf { child -> total(child).takeUnless { child.filtered } ?: 0 }
+            return ((own[node.did] ?: 0) + childrenTotal).also { totals[node.did] = it }
+        }
+        total(tree)
+        return totals
     }
 
     /** Select [deckId] (like tapping it in the deck list) and return the top of its queue. */

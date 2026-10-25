@@ -77,6 +77,24 @@ class WearRequestHandlerTest : RobolectricTest() {
         }
 
     @Test
+    fun `deck list has all cards of each deck, due or not`() =
+        runTest {
+            val vocab = addDeckWithBasicNotes("Japanese::Vocab", "犬" to "dog", "猫" to "cat")
+            val japanese = addDeckWithBasicNotes("Japanese", "水" to "water")
+            setCollapsed(japanese, false)
+            // not due, but still in the deck
+            col.sched.suspendCards(col.findCards("deck:Japanese -deck:Japanese::*"))
+            // the Vocab cards move to the filtered deck for now
+            val filtered = addDynamicDeck("Filtered", search = "deck:Japanese::Vocab")
+
+            val decks = deckList()
+
+            assertEquals(2, decks.single { it.id == vocab }.cardCount, "cards in a filtered deck count in their home deck")
+            assertEquals(3, decks.single { it.id == japanese }.cardCount, "subdecks are included, the filtered deck isn't")
+            assertEquals(2, decks.single { it.id == filtered }.cardCount, "a filtered deck has the cards it holds")
+        }
+
+    @Test
     fun `subdecks of collapsed decks are hidden, like in the deck picker`() =
         runTest {
             val deckId = addDeckWithBasicNotes("Japanese::Vocab", "犬" to "dog")

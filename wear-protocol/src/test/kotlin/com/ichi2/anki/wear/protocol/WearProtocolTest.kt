@@ -52,7 +52,7 @@ class WearProtocolTest {
             )
         val responses =
             listOf(
-                WearResponse.Decks(listOf(WatchDeck(id = 1, name = "Vocab", depth = 1, counts = counts))),
+                WearResponse.Decks(listOf(WatchDeck(id = 1, name = "Vocab", depth = 1, counts = counts, cardCount = 250))),
                 WearResponse.Study(deckName = "Japanese::Vocab", counts = counts, card = card),
                 WearResponse.Study(deckName = "Japanese", counts = WatchCounts(0, 0, 0), card = null, answerSkipped = true),
                 WearResponse.Synced(SyncStatus.NOT_LOGGED_IN),
@@ -72,6 +72,13 @@ class WearProtocolTest {
         for (response in responses) {
             assertEquals(response, WearProtocol.decodeResponse(WearProtocol.encode(response)))
         }
+    }
+
+    @Test
+    fun `deck from a phone that doesn't send the card count`() {
+        val json = """{"type":"decks","decks":[{"id":1,"name":"Vocab","depth":0,"counts":{"new":1,"learn":0,"review":2}}]}"""
+        val deck = (WearProtocol.decodeResponse(json.encodeToByteArray()) as WearResponse.Decks).decks.single()
+        assertEquals(null, deck.cardCount)
     }
 
     @Test
