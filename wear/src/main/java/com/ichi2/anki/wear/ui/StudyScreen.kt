@@ -16,15 +16,18 @@
 
 package com.ichi2.anki.wear.ui
 
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
+import androidx.annotation.VisibleForTesting
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -40,9 +43,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,8 +145,9 @@ fun StudyScreen(viewModel: StudyViewModel) {
  * Nothing else takes room from the text: thin colored arcs on the edges show which side is which.
  * Swiping right goes back to the deck list, as everywhere on Wear OS.
  */
+@VisibleForTesting
 @Composable
-private fun CardScreen(
+internal fun CardScreen(
     state: StudyState.Showing,
     onReveal: () -> Unit,
     onAnswer: (WatchRating) -> Unit,
@@ -165,13 +171,8 @@ private fun CardScreen(
         scrollState.animateScrollTo((top - margin).coerceAtLeast(0))
     }
 
-    var answerUnlocked by remember(state.sequence) { mutableStateOf(false) }
-    LaunchedEffect(state.sequence, state.revealed) {
-        if (!state.revealed) return@LaunchedEffect
-        delay(ANSWER_LOCK_MILLIS)
-        answerUnlocked = true
-    }
-    val canAnswer = state.revealed && !state.sending && answerUnlocked
+    // When the answer was shown, in the time base of touch events (SystemClock.uptimeMillis)
+    val revealedAt = remember { mutableLongStateOf(0L) }
 
     // the band last tapped, lit up for a moment (over the next card too)
     var flashRating by remember { mutableStateOf<WatchRating?>(null) }
@@ -193,6 +194,17 @@ private fun CardScreen(
         onAnswer(rating)
     }
 
+    fun reveal(uptimeMillis: Long) {
+        revealedAt.longValue = uptimeMillis
+        onReveal()
+    }
+
+    // One tap handler for the whole card, so nothing inside can swallow the taps: before the
+    // answer is shown a tap anywhere shows it, then the sides answer.
+    val currentState by rememberUpdatedState(state)
+    val revealWith by rememberUpdatedState<(Long) -> Unit> { reveal(it) }
+    val answerWith by rememberUpdatedState<(WatchRating) -> Unit> { answer(it) }
+
     ScreenScaffold(
         scrollState = scrollState,
         timeText = { CountsTimeText(state.counts) },
@@ -200,11 +212,23 @@ private fun CardScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .pointerInput(canAnswer, state.sequence) {
-                    if (!canAnswer) return@pointerInput
-                    // a drag scrolls the card instead, and doesn't count as a tap
-                    detectTapGestures { offset ->
-                        answerAt(offset.x, size.width.toFloat())?.let(::answer)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        // null when the card scrolled instead, or a button on top (Show) took the tap
+                        val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                        // a swipe (going back, or old habit) isn't a tap
+                        if ((up.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                            return@awaitEachGesture
+                        }
+                        up.consume()
+                        val card = currentState
+                        when {
+                            !card.revealed -> revealWith(up.uptimeMillis)
+                            card.sending -> {}
+                            up.uptimeMillis - revealedAt.longValue < ANSWER_LOCK_MILLIS -> {}
+                            else -> answerAt(up.position.x, size.width.toFloat())?.let(answerWith)
+                        }
                     }
                 },
         ) {
@@ -219,11 +243,6 @@ private fun CardScreen(
                         .rotaryScrollable(
                             RotaryScrollableDefaults.behavior(scrollableState = scrollState),
                             focusRequester = focusRequester,
-                        ).clickable(
-                            enabled = !state.revealed,
-                            interactionSource = null,
-                            indication = null,
-                            onClick = onReveal,
                         ).padding(horizontal = screenWidth * 0.12f),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -260,7 +279,7 @@ private fun CardScreen(
                         .background(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color.Black)),
                 )
                 EdgeButton(
-                    onClick = onReveal,
+                    onClick = { reveal(SystemClock.uptimeMillis()) },
                     modifier = Modifier.align(Alignment.BottomCenter),
                     buttonSize = EdgeButtonSize.ExtraSmall,
                 ) {
