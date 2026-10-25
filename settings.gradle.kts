@@ -18,3 +18,6 @@ dependencyResolutionManagement {
 }
 
 include(":lint-rules", ":api", ":AnkiDroid", ":testlib", ":common", ":libanki", ":libanki:testutils", ":vbpd")
+
+// Galaxy Watch / Wear OS study app, and the protocol it shares with the phone app
+include(":wear", ":wear-protocol")

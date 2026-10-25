@@ -21,6 +21,7 @@ plugins {
     alias(libs.plugins.kotlin.parcelize) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.ktlint.gradle.plugin) apply false
     alias(libs.plugins.keeper) apply false
 }
@@ -100,7 +101,8 @@ subprojects {
                     // Apply @StringRes to both constructor params and generated properties
                     "-Xannotation-default-target=param-property"
                 )
-                if (project.name != "api") {
+                // wear-protocol has no coroutines either
+                if (project.name != "api" && project.name != "wear-protocol") {
                     compilerArgs += "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
                 }
                 freeCompilerArgs = compilerArgs

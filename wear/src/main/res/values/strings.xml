@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AnkiDroid</string>
+
+    <string name="decks">Decks</string>
+    <string name="no_decks">No decks found on the phone.</string>
+    <string name="refresh">Refresh</string>
+
+    <string name="show_answer">Show answer</string>
+    <string name="again">Again</string>
+    <string name="good">Good</string>
+    <string name="empty_card">(empty)</string>
+    <string name="finished">Congratulations! You have finished this deck for now.</string>
+    <string name="check_again">Check again</string>
+
+    <string name="error_title">Can\'t reach AnkiDroid</string>
+    <string name="retry">Retry</string>
+    <string name="error_phone_not_connected">The phone isn\'t connected. Check Bluetooth and try again.</string>
+    <string name="error_phone_app_missing">AnkiDroid with watch support isn\'t on the phone. Install the phone build from the same project, signed with the same key.</string>
+    <string name="error_phone_timeout">AnkiDroid on the phone didn\'t answer in time.</string>
+    <string name="error_app_mismatch">The phone and watch apps don\'t match. Update both.</string>
+</resources>

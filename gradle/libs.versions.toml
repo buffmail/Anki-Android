@@ -114,6 +114,11 @@ triplet = "3.12.2"
 turbine = "1.2.1"
 lifecycleProcess = "2.9.3"
 
+# Watch app (:wear) and the phone-side bridge
+composeBom = "2025.10.01"
+playServicesWearable = "19.0.0"
+wearCompose = "1.5.6"
+
 [libraries]
 acra-limiter = { module = "ch.acra:acra-limiter", version.ref = "acra" }
 acra-toast = { module = "ch.acra:acra-toast", version.ref = "acra" }
@@ -202,6 +207,18 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 cashapp-turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
 
+# Watch app (:wear) and the phone-side bridge
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleProcess" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycleProcess" }
+androidx-wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wearCompose" }
+androidx-wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wearCompose" }
+androidx-wear-compose-navigation = { module = "androidx.wear.compose:compose-navigation", version.ref = "wearCompose" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
+play-services-wearable = { module = "com.google.android.gms:play-services-wearable", version.ref = "playServicesWearable" }
+
 [plugins]
 
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
@@ -214,6 +231,7 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
 
 ktlint-gradle-plugin = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradlePlugin" }

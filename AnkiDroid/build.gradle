@@ -363,6 +363,10 @@ dependencies {
     implementation project(":common")
     implementation project(":libanki")
     implementation project(":vbpd")
+    implementation project(":wear-protocol")
+
+    // Watch app bridge (WearBridgeService). Play flavor only: keeps the F-Droid build free of Play services
+    playImplementation libs.play.services.wearable
 
     implementation libs.androidx.activity
     implementation libs.androidx.annotation
