@@ -1256,7 +1256,10 @@ class NoteEditorFragment :
     // ----------------------------------------------------------------------------
 
     @KotlinCleanup("return early and simplify if possible")
-    private fun onNoteAdded(count: Int) {
+    private fun onNoteAdded(
+        count: Int,
+        newCardsToday: Int,
+    ) {
         var closeEditorAfterSave = false
         var closeIntent: Intent? = null
         changed = true
@@ -1277,7 +1280,13 @@ class NoteEditorFragment :
 
         if (closeEditorAfterSave) {
             if (caller == NoteEditorCaller.NOTEEDITOR_INTENT_ADD || aedictIntent) {
-                showThemedToast(requireContext(), R.string.note_message, shortLength = true)
+                val message =
+                    getString(
+                        R.string.note_message_with_new_count,
+                        getString(R.string.note_message),
+                        newCardsToday,
+                    )
+                showThemedToast(requireContext(), message, shortLength = true)
             }
             closeNoteEditor(closeIntent ?: Intent())
         } else {
@@ -1295,8 +1304,9 @@ class NoteEditorFragment :
                     addNote(editorNote!!, deckId)
                 }
             }
+        val todayNewCardsForDeck = withCol { sched.deckDueTree(deckId)?.newCount ?: 0 }
         // update UI based on the result, noOfAddedCards
-        onNoteAdded(changes.count)
+        onNoteAdded(changes.count, todayNewCardsForDeck)
     }
 
     @VisibleForTesting
@@ -1688,7 +1698,8 @@ class NoteEditorFragment :
     private fun closeNoteEditor(
         result: Int,
         intent: Intent?,
-    ) requireActivity().apply {
+    ) {
+        requireActivity().apply {
             // Avoid setting a result for auto-saved external intents; otherwise finishAffinity throws
             if (!(autoSaveFromIntentAdd)) {
                 if (intent != null) {

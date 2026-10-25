@@ -74,7 +74,10 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
         intent: Intent,
     ) {
         if (intent.action.contentEquals("com.sec.android.widgetapp.APPWIDGET_RESIZE")) {
-            updateWidgetDimensions(context, RemoteViews(context.packageName, R.layout.widget_small), AnkiDroidWidgetSmall::class.java)
+            // Samsung's launcher sends this broadcast when it recalculates widget bounds.
+            // Using a fresh RemoteViews here cleared the due-count text, leaving the badge empty.
+            // Trigger the normal widget update so content is preserved and sizing stays correct.
+            WidgetStatus.updateInBackground(context)
         }
         super.onReceive(context, intent)
     }
@@ -87,17 +90,24 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
          */
         fun doUpdate(context: Context) {
             val appWidgetManager = getAppWidgetManager(context) ?: return
-            val remoteViews = buildUpdate(context)
-            appWidgetManager.updateAppWidget(ComponentName(context, AnkiDroidWidgetSmall::class.java), remoteViews)
+            val provider = ComponentName(context, AnkiDroidWidgetSmall::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIdsEx(provider)
+            for (appWidgetId in appWidgetIds) {
+                val remoteViews = buildUpdate(context, appWidgetManager, appWidgetId)
+                appWidgetManager.updateAppWidget(appWidgetId, remoteViews)
+            }
         }
 
         @Deprecated("Implement onStartCommand(Intent, int, int) instead.") // TODO
         override fun onStart(intent: Intent, startId: Int) {
             Timber.i("SmallWidget: OnStart")
             val manager = getAppWidgetManager(this) ?: return
-            val updateViews = buildUpdate(this)
-            val thisWidget = ComponentName(this, AnkiDroidWidgetSmall::class.java)
-            manager.updateAppWidget(thisWidget, updateViews)
+            val provider = ComponentName(this, AnkiDroidWidgetSmall::class.java)
+            val appWidgetIds = manager.getAppWidgetIdsEx(provider)
+            for (appWidgetId in appWidgetIds) {
+                val updateViews = buildUpdate(this, manager, appWidgetId)
+                manager.updateAppWidget(appWidgetId, updateViews)
+            }
         }
 
         @get:LayoutRes
@@ -107,7 +117,11 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
                 return if (disableMaterialYouDynamicColor) R.layout.widget_small_unthemed else R.layout.widget_small
             }
 
-        private fun buildUpdate(context: Context): RemoteViews {
+        private fun buildUpdate(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: AppWidgetId,
+        ): RemoteViews {
             Timber.d("updating small widget UI")
             val updateViews = RemoteViews(context.packageName, widgetSmallLayout)
             val mounted = AnkiDroidApp.isSdCardMounted
@@ -174,7 +188,7 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
                     false,
                 )
             updateViews.setOnClickPendingIntent(R.id.ankidroid_widget_small_button, pendingAnkiDroidIntent)
-            updateWidgetDimensions(context, updateViews, AnkiDroidWidgetSmall::class.java)
+            updateWidgetDimensions(context, appWidgetManager, updateViews, appWidgetId)
             return updateViews
         }
 
@@ -190,38 +204,50 @@ class AnkiDroidWidgetSmall : AnalyticsWidgetProvider() {
 
         private fun updateWidgetDimensions(
             context: Context,
+            appWidgetManager: AppWidgetManager,
             updateViews: RemoteViews,
-            cls: Class<*>,
+            appWidgetId: AppWidgetId,
         ) {
-            val manager = getAppWidgetManager(context) ?: return
-            val ids = manager.getAppWidgetIdsEx(ComponentName(context, cls))
-            for (id in ids) {
-                val scale = context.resources.displayMetrics.density
-                val options = manager.getAppWidgetOptions(id)
-                var width: Float
-                var height: Float
-                if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
-                    width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).toFloat()
-                    height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).toFloat()
-                } else {
-                    width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH).toFloat()
-                    height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT).toFloat()
-                }
-                var horizontal: Int
-                var vertical: Int
-                var text: Float
-                if (width / height > 0.8) {
-                    horizontal = (((width - height * 0.8) / 2 + 4) * scale + 0.5f).toInt()
-                    vertical = (4 * scale + 0.5f).toInt()
-                    text = (sqrt(height * 0.8 / width) * 18).toFloat()
-                } else {
-                    vertical = (((height - width * 1.25) / 2 + 4) * scale + 0.5f).toInt()
-                    horizontal = (4 * scale + 0.5f).toInt()
-                    text = (sqrt(width * 1.25 / height) * 18).toFloat()
-                }
-                updateViews.setTextViewTextSize(R.id.widget_due, TypedValue.COMPLEX_UNIT_SP, text)
-                updateViews.setViewPadding(R.id.ankidroid_widget_text_layout, horizontal, vertical, horizontal, vertical)
+            val scale = context.resources.displayMetrics.density
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            var width: Float
+            var height: Float
+            if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+                width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).toFloat()
+                height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).toFloat()
+            } else {
+                width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH).toFloat()
+                height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT).toFloat()
             }
+
+            // Guard against invalid launcher bounds (0/negative) to avoid invisible text.
+            if (width <= 0f) width = 40f
+            if (height <= 0f) height = 40f
+
+            var horizontal: Int
+            var vertical: Int
+            var text: Float
+            if (width / height > 0.8f) {
+                horizontal = (((width - height * 0.8f) / 2 + 4) * scale + 0.5f).toInt()
+                vertical = (4 * scale + 0.5f).toInt()
+                text = sqrt(height * 0.8f / width) * 18f
+            } else {
+                vertical = (((height - width * 1.25f) / 2 + 4) * scale + 0.5f).toInt()
+                horizontal = (4 * scale + 0.5f).toInt()
+                text = sqrt(width * 1.25f / height) * 18f
+            }
+
+            text =
+                if (text.isFinite()) {
+                    text.coerceIn(10f, 32f)
+                } else {
+                    18f
+                }
+            horizontal = horizontal.coerceAtLeast(0)
+            vertical = vertical.coerceAtLeast(0)
+
+            updateViews.setTextViewTextSize(R.id.widget_due, TypedValue.COMPLEX_UNIT_SP, text)
+            updateViews.setViewPadding(R.id.ankidroid_widget_text_layout, horizontal, vertical, horizontal, vertical)
         }
     }
 }

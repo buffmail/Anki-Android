@@ -363,7 +363,7 @@ abstract class AbstractFlashcardViewer :
                The card could have been rescheduled, the deck could have changed, or a change of
                note type could have lead to the card being deleted */
             val reloadRequired =
-                result.data?.getBooleanExtra(NoteEditorFragment.RELOAD_REQUIRED_EXTRA_KEY, false) == true
+                result.data?.getBooleanExtra(NOTE_EDITOR_RELOAD_REQUIRED_EXTRA_KEY, false) == true
             if (reloadRequired) {
                 performReload()
             }
@@ -2742,6 +2742,11 @@ abstract class AbstractFlashcardViewer :
          * Should be protected, using non-JVM static members protected in the superclass companion is unsupported yet
          */
         const val INITIAL_HIDE_DELAY = 200
+
+        /**
+         * Keep this local so reviewer code keeps compiling while NoteEditorFragment is being edited.
+         */
+        private const val NOTE_EDITOR_RELOAD_REQUIRED_EXTRA_KEY = "reloadRequired"
         internal var displayAnswer = false
         const val DEFAULT_DOUBLE_TAP_TIME_INTERVAL = 200
 

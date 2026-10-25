@@ -24,6 +24,7 @@
     <string name="drawer_close">Close drawer</string>
 
     <string name="note_message">Note saved</string>
+    <string name="note_message_with_new_count">%1$s (new: %2$d)</string>
 
     <!-- Note editor screen -->
     <string name="CardEditorCardDeck">Card deck:</string>
@@ -449,4 +450,3 @@ opening the system text to speech settings fails">Failed to open text to speech 
     <!-- Scheduler Upgrade Required Dialog title-->
     <string name="scheduler_upgrade_required_dialog_title" comment="Shown in a dialog when user has imported a collection using a very old version of the Anki spaced repetition scheduler">Scheduler upgrade required</string>
 </resources>
-
