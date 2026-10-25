@@ -21,10 +21,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -57,16 +54,12 @@ private fun WearApp() {
     val context = LocalContext.current
     val phone = remember { PhoneClient(context.applicationContext) }
     val navController = rememberSwipeDismissableNavController()
-    // Off while swiping answers a card: swiping right means Good there, not "back".
-    // The watch's back button still goes back.
-    var swipeBackEnabled by remember { mutableStateOf(true) }
 
     MaterialTheme {
         AppScaffold {
             SwipeDismissableNavHost(
                 navController = navController,
                 startDestination = DECKS_ROUTE,
-                userSwipeEnabled = swipeBackEnabled,
             ) {
                 composable(DECKS_ROUTE) {
                     DeckListScreen(
@@ -99,11 +92,7 @@ private fun WearApp() {
                     arguments = listOf(navArgument(DECK_ID_ARG) { type = NavType.LongType }),
                 ) { entry ->
                     val deckId = entry.arguments?.getLong(DECK_ID_ARG) ?: return@composable
-                    StudyScreen(
-                        viewModel = viewModel { StudyViewModel(phone, deckId) },
-                        onSwipeToAnswerChanged = { active -> swipeBackEnabled = !active },
-                        onBack = { navController.popBackStack() },
-                    )
+                    StudyScreen(viewModel = viewModel { StudyViewModel(phone, deckId) })
                 }
             }
         }

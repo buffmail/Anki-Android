@@ -3,7 +3,11 @@
 A minimal watch app (built for Galaxy Watch 7) to study existing decks and add English words.
 
 - Deck list with new / learning / review counts
-- Study: tap to show the answer, then swipe **left for Again** or **right for Good** (thin red / green arcs on the edges are the reminder). The watch's back button returns to the deck list
+- Study: tap to show the answer, then tap the **left side for Again** or the **right side for Good**
+  (each side is about 30% of the screen; the middle does nothing). Thin red / green arcs on the
+  edges are the reminder; the tapped side lights up, and Good buzzes once, Again twice. Taps are
+  ignored for 0.4 s after the answer appears, so a double tap on *Show* doesn't answer the card.
+  Swipe right or press the back button to return to the deck list
 - Back to the deck list after studying: the phone syncs with AnkiWeb, then the counts refresh
 - Text only: images, audio and other media are left out
 - **Add word** (top of the deck list): type, write or say an English word, check its meanings,

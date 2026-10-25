@@ -18,17 +18,18 @@ package com.ichi2.anki.wear.ui
 
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
-import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,7 +40,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,7 +86,6 @@ import com.ichi2.anki.wear.protocol.WatchCounts
 import com.ichi2.anki.wear.protocol.WatchRating
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val againColor = Color(0xFFC62828)
@@ -95,26 +94,25 @@ private val goodColor = Color(0xFF2E7D32)
 /** How long the screen stays on after the last tap. Longer than the watch's own timeout. */
 private const val KEEP_SCREEN_ON_MILLIS = 60_000L
 
-/** How far to swipe, as a fraction of the screen width, before letting go answers the card. */
-private const val SWIPE_TO_ANSWER_FRACTION = 0.25f
+/**
+ * Width of each answer band, as a fraction of the screen: tapping the left band answers Again,
+ * the right band Good. Tapping the middle does nothing, so a stray tap there is harmless.
+ */
+private const val ANSWER_BAND_FRACTION = 0.3f
+
+/** The bands don't answer until the answer has been shown this long: a double tap on Show
+ * would otherwise answer the card too. */
+private const val ANSWER_LOCK_MILLIS = 400L
+
+/** How long the tapped band lights up. */
+private const val FLASH_MILLIS = 350
+
+/** Again buzzes twice, this far apart; Good buzzes once. */
+private const val AGAIN_SECOND_BUZZ_MILLIS = 130L
 
 @Composable
-fun StudyScreen(
-    viewModel: StudyViewModel,
-    /** Told when swiping answers the card, so the app can turn off swipe-to-go-back meanwhile. */
-    onSwipeToAnswerChanged: (Boolean) -> Unit,
-    onBack: () -> Unit,
-) {
-    val state = viewModel.state
-    val swipeToAnswer = state is StudyState.Showing && state.revealed
-    DisposableEffect(swipeToAnswer) {
-        onSwipeToAnswerChanged(swipeToAnswer)
-        onDispose { onSwipeToAnswerChanged(false) }
-    }
-    // Turning off swipe-to-go-back also turns off the back button on Wear OS 6: keep it working.
-    BackHandler(enabled = swipeToAnswer, onBack = onBack)
-
-    when (state) {
+fun StudyScreen(viewModel: StudyViewModel) {
+    when (val state = viewModel.state) {
         StudyState.Loading -> LoadingScreen()
         is StudyState.Failed ->
             MessageScreen(
@@ -138,8 +136,9 @@ fun StudyScreen(
 }
 
 /**
- * The card. Tap to show the answer; then swipe left for Again or right for Good.
- * Nothing else takes room from the text: thin colored arcs on the edges show which way is which.
+ * The card. Tap to show the answer; then tap the left side for Again or the right side for Good.
+ * Nothing else takes room from the text: thin colored arcs on the edges show which side is which.
+ * Swiping right goes back to the deck list, as everywhere on Wear OS.
  */
 @Composable
 private fun CardScreen(
@@ -166,15 +165,31 @@ private fun CardScreen(
         scrollState.animateScrollTo((top - margin).coerceAtLeast(0))
     }
 
-    val canAnswer = state.revealed && !state.sending
-    val screenWidthPx = with(density) { screenWidth.toPx() }
-    val swipeThresholdPx = screenWidthPx * SWIPE_TO_ANSWER_FRACTION
-    // horizontal position of the card while swiping; negative = Again, positive = Good
-    var swipeOffset by remember(state.sequence) { mutableFloatStateOf(0f) }
-    val swipeRating = swipeOffset.ratingAt(swipeThresholdPx)
+    var answerUnlocked by remember(state.sequence) { mutableStateOf(false) }
+    LaunchedEffect(state.sequence, state.revealed) {
+        if (!state.revealed) return@LaunchedEffect
+        delay(ANSWER_LOCK_MILLIS)
+        answerUnlocked = true
+    }
+    val canAnswer = state.revealed && !state.sending && answerUnlocked
+
+    // the band last tapped, lit up for a moment (over the next card too)
+    var flashRating by remember { mutableStateOf<WatchRating?>(null) }
+    val flashAlpha = remember { Animatable(0f) }
 
     fun answer(rating: WatchRating) {
         view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        if (rating == WatchRating.AGAIN) {
+            scope.launch {
+                delay(AGAIN_SECOND_BUZZ_MILLIS)
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            }
+        }
+        flashRating = rating
+        scope.launch {
+            flashAlpha.snapTo(1f)
+            flashAlpha.animateTo(0f, tween(FLASH_MILLIS))
+        }
         onAnswer(rating)
     }
 
@@ -187,42 +202,19 @@ private fun CardScreen(
                 .fillMaxSize()
                 .pointerInput(canAnswer, state.sequence) {
                     if (!canAnswer) return@pointerInput
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val rating = swipeOffset.ratingAt(swipeThresholdPx)
-                            if (rating != null) {
-                                answer(rating)
-                                // slide the card out while the next one loads
-                                val target = if (rating == WatchRating.GOOD) screenWidthPx else -screenWidthPx
-                                scope.launch { animate(swipeOffset, target) { value, _ -> swipeOffset = value } }
-                            } else {
-                                scope.launch { animate(swipeOffset, 0f) { value, _ -> swipeOffset = value } }
-                            }
-                        },
-                        onDragCancel = {
-                            scope.launch { animate(swipeOffset, 0f) { value, _ -> swipeOffset = value } }
-                        },
-                    ) { change, dragAmount ->
-                        change.consume()
-                        val before = swipeOffset.ratingAt(swipeThresholdPx)
-                        swipeOffset += dragAmount
-                        val after = swipeOffset.ratingAt(swipeThresholdPx)
-                        // a tick when crossing the point where letting go answers the card
-                        if (after != null && after != before) {
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                        }
+                    // a drag scrolls the card instead, and doesn't count as a tap
+                    detectTapGestures { offset ->
+                        answerAt(offset.x, size.width.toFloat())?.let(::answer)
                     }
                 },
         ) {
-            SwipeFeedback(swipeOffset / swipeThresholdPx, swipeRating)
             Column(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            translationX = swipeOffset
-                            alpha = 1f - 0.5f * (abs(swipeOffset) / swipeThresholdPx).coerceAtMost(1f)
-                        }.verticalScroll(scrollState)
+                        // dimmed while the answer is on its way to the phone
+                        .graphicsLayer { alpha = if (state.sending) 0.5f else 1f }
+                        .verticalScroll(scrollState)
                         .requestFocusOnHierarchyActive()
                         .rotaryScrollable(
                             RotaryScrollableDefaults.behavior(scrollableState = scrollState),
@@ -257,7 +249,7 @@ private fun CardScreen(
             }
 
             if (state.revealed) {
-                SwipeHints()
+                AnswerHints()
             } else {
                 // fades out text that scrolls behind the button
                 Box(
@@ -275,61 +267,62 @@ private fun CardScreen(
                     Text(stringResource(R.string.show_answer))
                 }
             }
+
+            flashRating?.let { AnswerFlash(it, flashAlpha.value) }
         }
     }
 }
 
-/** The answer that letting go would give: past the threshold on either side. */
-private fun Float.ratingAt(threshold: Float): WatchRating? =
+/** The answer a tap at [x] gives: Again on the left band, Good on the right, nothing in between. */
+private fun answerAt(
+    x: Float,
+    width: Float,
+): WatchRating? =
     when {
-        this <= -threshold -> WatchRating.AGAIN
-        this >= threshold -> WatchRating.GOOD
+        x < width * ANSWER_BAND_FRACTION -> WatchRating.AGAIN
+        x > width * (1 - ANSWER_BAND_FRACTION) -> WatchRating.GOOD
         else -> null
     }
 
-/**
- * Tints the screen red (swiping left, Again) or green (swiping right, Good) and names the answer
- * on the side the card moves away from. [progress] is -1..1 at the threshold.
- */
+/** Lights up the band that was tapped and names the answer, fading out as [alpha] goes to 0. */
 @Composable
-private fun BoxScope.SwipeFeedback(
-    progress: Float,
-    armed: WatchRating?,
+private fun BoxScope.AnswerFlash(
+    rating: WatchRating,
+    alpha: Float,
 ) {
-    if (progress == 0f) return
-    val isAgain = progress < 0
-    val strength = abs(progress).coerceAtMost(1f)
+    if (alpha <= 0f) return
+    val isAgain = rating == WatchRating.AGAIN
     Box(
         Modifier
-            .matchParentSize()
-            .background((if (isAgain) againColor else goodColor).copy(alpha = 0.45f * strength)),
-    )
-    Text(
-        stringResource(if (isAgain) R.string.again else R.string.good),
-        modifier =
-            Modifier
-                .align(if (isAgain) Alignment.CenterEnd else Alignment.CenterStart)
-                .padding(horizontal = 14.dp)
-                .graphicsLayer { alpha = strength },
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = if (armed != null) FontWeight.Bold else FontWeight.Normal,
-    )
+            .align(if (isAgain) Alignment.CenterStart else Alignment.CenterEnd)
+            .fillMaxHeight()
+            .fillMaxWidth(ANSWER_BAND_FRACTION)
+            .graphicsLayer { this.alpha = alpha }
+            .background((if (isAgain) againColor else goodColor).copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            stringResource(if (isAgain) R.string.again else R.string.good),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+    }
 }
 
 /**
- * Thin arcs on the screen edge: red on the left (swipe left, Again), green on the right (Good).
+ * Thin arcs on the screen edge: red on the left (tap there for Again), green on the right (Good).
  * They sit in the lower half so the right one stays clear of the scroll indicator at 3 o'clock.
  */
 @Composable
-private fun BoxScope.SwipeHints() {
+private fun BoxScope.AnswerHints() {
     Canvas(Modifier.matchParentSize().padding(3.dp)) {
         val strokeWidth = 4.dp.toPx()
         val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
         val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
         val stroke = Stroke(strokeWidth, cap = StrokeCap.Round)
         // angles in degrees, clockwise from 3 o'clock: about 4-5 o'clock and 7-8 o'clock
-        drawArc(goodColor, startAngle = 28f, sweepAngle = 30f, useCenter = false, topLeft, arcSize, style = stroke)
-        drawArc(againColor, startAngle = 122f, sweepAngle = 30f, useCenter = false, topLeft, arcSize, style = stroke)
+        drawArc(goodColor, startAngle = 25f, sweepAngle = 40f, useCenter = false, topLeft, arcSize, style = stroke)
+        drawArc(againColor, startAngle = 115f, sweepAngle = 40f, useCenter = false, topLeft, arcSize, style = stroke)
     }
 }
 
