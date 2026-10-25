@@ -41,9 +41,12 @@ fun UiMessage.asString(): String =
     }
 
 /** The reply to [request] if it has type [T]; otherwise the error to show. */
-suspend inline fun <reified T : WearResponse> PhoneClient.sendForResult(request: WearRequest): Result<T> =
+suspend inline fun <reified T : WearResponse> PhoneClient.sendForResult(
+    request: WearRequest,
+    timeoutMillis: Long = PhoneClient.DEFAULT_TIMEOUT_MILLIS,
+): Result<T> =
     try {
-        when (val response = send(request)) {
+        when (val response = send(request, timeoutMillis)) {
             is T -> Result.success(response)
             is WearResponse.Error -> Result.failure(PhoneError(UiMessage.Text(response.message)))
             else -> Result.failure(PhoneError(UiMessage.Resource(R.string.error_app_mismatch)))

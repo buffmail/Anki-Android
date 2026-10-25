@@ -33,7 +33,7 @@ import kotlinx.serialization.json.Json
  * running different versions report a clear error instead of misbehaving.
  */
 object WearProtocol {
-    const val VERSION = 1
+    const val VERSION = 2
     const val PATH_PREFIX = "/ankidroid"
     const val RPC_PATH = "$PATH_PREFIX/v$VERSION"
 
@@ -83,6 +83,14 @@ sealed interface WearRequest {
         val rating: WatchRating,
         val millisTaken: Long,
     ) : WearRequest
+
+    /**
+     * Sync the phone's collection with AnkiWeb. Replied with [WearResponse.Synced] once the
+     * sync has finished, or after a while if it's still running.
+     */
+    @Serializable
+    @SerialName("sync")
+    data object Sync : WearRequest
 }
 
 @Serializable
@@ -113,10 +121,27 @@ sealed interface WearResponse {
     ) : WearResponse
 
     @Serializable
+    @SerialName("synced")
+    data class Synced(
+        val status: SyncStatus,
+    ) : WearResponse
+
+    @Serializable
     @SerialName("error")
     data class Error(
         val message: String,
     ) : WearResponse
+}
+
+@Serializable
+enum class SyncStatus {
+    DONE,
+    FAILED,
+
+    /** Still running when the phone stopped waiting. */
+    STILL_RUNNING,
+    NOT_LOGGED_IN,
+    OFFLINE,
 }
 
 @Serializable

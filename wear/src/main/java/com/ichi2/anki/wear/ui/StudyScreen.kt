@@ -18,15 +18,16 @@ package com.ichi2.anki.wear.ui
 
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.core.animate
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,14 +39,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
@@ -56,33 +65,28 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.CurvedModifier
-import androidx.wear.compose.foundation.padding
+import androidx.wear.compose.foundation.CurvedTextStyle
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
-import androidx.wear.compose.material3.Button
-import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TimeText
-import androidx.wear.compose.material3.curvedText
 import androidx.wear.compose.material3.timeTextCurvedText
 import androidx.wear.compose.material3.timeTextSeparator
 import com.ichi2.anki.wear.R
 import com.ichi2.anki.wear.StudyState
 import com.ichi2.anki.wear.StudyViewModel
 import com.ichi2.anki.wear.asString
-import com.ichi2.anki.wear.protocol.WatchCard
 import com.ichi2.anki.wear.protocol.WatchCounts
-import com.ichi2.anki.wear.protocol.WatchQueue
 import com.ichi2.anki.wear.protocol.WatchRating
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val againColor = Color(0xFFC62828)
@@ -91,9 +95,26 @@ private val goodColor = Color(0xFF2E7D32)
 /** How long the screen stays on after the last tap. Longer than the watch's own timeout. */
 private const val KEEP_SCREEN_ON_MILLIS = 60_000L
 
+/** How far to swipe, as a fraction of the screen width, before letting go answers the card. */
+private const val SWIPE_TO_ANSWER_FRACTION = 0.25f
+
 @Composable
-fun StudyScreen(viewModel: StudyViewModel) {
-    when (val state = viewModel.state) {
+fun StudyScreen(
+    viewModel: StudyViewModel,
+    /** Told when swiping answers the card, so the app can turn off swipe-to-go-back meanwhile. */
+    onSwipeToAnswerChanged: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    val state = viewModel.state
+    val swipeToAnswer = state is StudyState.Showing && state.revealed
+    DisposableEffect(swipeToAnswer) {
+        onSwipeToAnswerChanged(swipeToAnswer)
+        onDispose { onSwipeToAnswerChanged(false) }
+    }
+    // Turning off swipe-to-go-back also turns off the back button on Wear OS 6: keep it working.
+    BackHandler(enabled = swipeToAnswer, onBack = onBack)
+
+    when (state) {
         StudyState.Loading -> LoadingScreen()
         is StudyState.Failed ->
             MessageScreen(
@@ -116,6 +137,10 @@ fun StudyScreen(viewModel: StudyViewModel) {
     }
 }
 
+/**
+ * The card. Tap to show the answer; then swipe left for Again or right for Good.
+ * Nothing else takes room from the text: thin colored arcs on the edges show which way is which.
+ */
 @Composable
 private fun CardScreen(
     state: StudyState.Showing,
@@ -126,6 +151,8 @@ private fun CardScreen(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
     // rotary input (the Galaxy Watch bezel) scrolls the card
     val focusRequester = remember { FocusRequester() }
 
@@ -139,16 +166,63 @@ private fun CardScreen(
         scrollState.animateScrollTo((top - margin).coerceAtLeast(0))
     }
 
+    val canAnswer = state.revealed && !state.sending
+    val screenWidthPx = with(density) { screenWidth.toPx() }
+    val swipeThresholdPx = screenWidthPx * SWIPE_TO_ANSWER_FRACTION
+    // horizontal position of the card while swiping; negative = Again, positive = Good
+    var swipeOffset by remember(state.sequence) { mutableFloatStateOf(0f) }
+    val swipeRating = swipeOffset.ratingAt(swipeThresholdPx)
+
+    fun answer(rating: WatchRating) {
+        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        onAnswer(rating)
+    }
+
     ScreenScaffold(
         scrollState = scrollState,
-        timeText = { CountsTimeText(state.counts, card.queue) },
+        timeText = { CountsTimeText(state.counts) },
     ) { _ ->
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(canAnswer, state.sequence) {
+                    if (!canAnswer) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val rating = swipeOffset.ratingAt(swipeThresholdPx)
+                            if (rating != null) {
+                                answer(rating)
+                                // slide the card out while the next one loads
+                                val target = if (rating == WatchRating.GOOD) screenWidthPx else -screenWidthPx
+                                scope.launch { animate(swipeOffset, target) { value, _ -> swipeOffset = value } }
+                            } else {
+                                scope.launch { animate(swipeOffset, 0f) { value, _ -> swipeOffset = value } }
+                            }
+                        },
+                        onDragCancel = {
+                            scope.launch { animate(swipeOffset, 0f) { value, _ -> swipeOffset = value } }
+                        },
+                    ) { change, dragAmount ->
+                        change.consume()
+                        val before = swipeOffset.ratingAt(swipeThresholdPx)
+                        swipeOffset += dragAmount
+                        val after = swipeOffset.ratingAt(swipeThresholdPx)
+                        // a tick when crossing the point where letting go answers the card
+                        if (after != null && after != before) {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        }
+                    }
+                },
+        ) {
+            SwipeFeedback(swipeOffset / swipeThresholdPx, swipeRating)
             Column(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .verticalScroll(scrollState)
+                        .graphicsLayer {
+                            translationX = swipeOffset
+                            alpha = 1f - 0.5f * (abs(swipeOffset) / swipeThresholdPx).coerceAtMost(1f)
+                        }.verticalScroll(scrollState)
                         .requestFocusOnHierarchyActive()
                         .rotaryScrollable(
                             RotaryScrollableDefaults.behavior(scrollableState = scrollState),
@@ -178,30 +252,84 @@ private fun CardScreen(
                     )
                     CardText(card.answer)
                 }
-                // room for the buttons at the bottom edge
-                Spacer(Modifier.height(screenWidth * 0.36f))
+                // keeps the last line out of the round screen's narrow bottom
+                Spacer(Modifier.height(screenWidth * if (state.revealed) 0.15f else 0.26f))
             }
 
-            // fades out text that scrolls behind the buttons
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(screenWidth * 0.36f)
-                    .background(Brush.verticalGradient(0f to Color.Transparent, 0.4f to Color.Black)),
-            )
             if (state.revealed) {
-                AnswerButtons(card, enabled = !state.sending, onAnswer = onAnswer, screenWidth = screenWidth)
+                SwipeHints()
             } else {
+                // fades out text that scrolls behind the button
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(screenWidth * 0.26f)
+                        .background(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color.Black)),
+                )
                 EdgeButton(
                     onClick = onReveal,
                     modifier = Modifier.align(Alignment.BottomCenter),
-                    buttonSize = EdgeButtonSize.Small,
+                    buttonSize = EdgeButtonSize.ExtraSmall,
                 ) {
                     Text(stringResource(R.string.show_answer))
                 }
             }
         }
+    }
+}
+
+/** The answer that letting go would give: past the threshold on either side. */
+private fun Float.ratingAt(threshold: Float): WatchRating? =
+    when {
+        this <= -threshold -> WatchRating.AGAIN
+        this >= threshold -> WatchRating.GOOD
+        else -> null
+    }
+
+/**
+ * Tints the screen red (swiping left, Again) or green (swiping right, Good) and names the answer
+ * on the side the card moves away from. [progress] is -1..1 at the threshold.
+ */
+@Composable
+private fun BoxScope.SwipeFeedback(
+    progress: Float,
+    armed: WatchRating?,
+) {
+    if (progress == 0f) return
+    val isAgain = progress < 0
+    val strength = abs(progress).coerceAtMost(1f)
+    Box(
+        Modifier
+            .matchParentSize()
+            .background((if (isAgain) againColor else goodColor).copy(alpha = 0.45f * strength)),
+    )
+    Text(
+        stringResource(if (isAgain) R.string.again else R.string.good),
+        modifier =
+            Modifier
+                .align(if (isAgain) Alignment.CenterEnd else Alignment.CenterStart)
+                .padding(horizontal = 14.dp)
+                .graphicsLayer { alpha = strength },
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = if (armed != null) FontWeight.Bold else FontWeight.Normal,
+    )
+}
+
+/**
+ * Thin arcs on the screen edge: red on the left (swipe left, Again), green on the right (Good).
+ * They sit in the lower half so the right one stays clear of the scroll indicator at 3 o'clock.
+ */
+@Composable
+private fun BoxScope.SwipeHints() {
+    Canvas(Modifier.matchParentSize().padding(3.dp)) {
+        val strokeWidth = 4.dp.toPx()
+        val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+        val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+        val stroke = Stroke(strokeWidth, cap = StrokeCap.Round)
+        // angles in degrees, clockwise from 3 o'clock: about 4-5 o'clock and 7-8 o'clock
+        drawArc(goodColor, startAngle = 28f, sweepAngle = 30f, useCenter = false, topLeft, arcSize, style = stroke)
+        drawArc(againColor, startAngle = 122f, sweepAngle = 30f, useCenter = false, topLeft, arcSize, style = stroke)
     }
 }
 
@@ -218,88 +346,14 @@ private fun CardText(html: String) {
     )
 }
 
+/** The clock, followed by the number of cards left to study today, in bold accent color. */
 @Composable
-private fun BoxScope.AnswerButtons(
-    card: WatchCard,
-    enabled: Boolean,
-    onAnswer: (WatchRating) -> Unit,
-    screenWidth: Dp,
-) {
-    val view = LocalView.current
-    // sized to stay inside the round screen's bottom edge
-    Row(
-        modifier =
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = screenWidth * 0.065f)
-                .fillMaxWidth(0.64f),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        AnswerButton(
-            label = stringResource(R.string.again),
-            interval = card.againInterval,
-            color = againColor,
-            enabled = enabled,
-            modifier = Modifier.weight(1f),
-        ) {
-            view.performHapticFeedback(HapticFeedbackConstants.REJECT)
-            onAnswer(WatchRating.AGAIN)
-        }
-        AnswerButton(
-            label = stringResource(R.string.good),
-            interval = card.goodInterval,
-            color = goodColor,
-            enabled = enabled,
-            modifier = Modifier.weight(1f),
-        ) {
-            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            onAnswer(WatchRating.GOOD)
-        }
-    }
-}
-
-@Composable
-private fun AnswerButton(
-    label: String,
-    interval: String,
-    color: Color,
-    enabled: Boolean,
-    modifier: Modifier,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(52.dp),
-        enabled = enabled,
-        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White),
-        contentPadding = PaddingValues(horizontal = 4.dp),
-    ) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-            Text(interval, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        }
-    }
-}
-
-/** The clock, followed by the new / learning / review counts. The current card's queue is bold. */
-@Composable
-private fun CountsTimeText(
-    counts: WatchCounts,
-    queue: WatchQueue,
-) {
-    fun weight(of: WatchQueue) = if (of == queue) FontWeight.Bold else FontWeight.Normal
+private fun CountsTimeText(counts: WatchCounts) {
+    val totalStyle = CurvedTextStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
     TimeText { time ->
         timeTextCurvedText(time)
         timeTextSeparator()
-        curvedText(counts.new.toString(), color = CountColors.new, fontWeight = weight(WatchQueue.NEW))
-        // curved text drops surrounding spaces: use padding instead
-        curvedText(
-            counts.learn.toString(),
-            modifier = CurvedModifier.padding(angular = 4.dp),
-            color = CountColors.learn,
-            fontWeight = weight(WatchQueue.LEARN),
-        )
-        curvedText(counts.review.toString(), color = CountColors.review, fontWeight = weight(WatchQueue.REVIEW))
+        timeTextCurvedText(counts.total.toString(), totalStyle)
     }
 }
 

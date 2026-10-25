@@ -45,11 +45,14 @@ class PhoneClient(
     private val nodeClient = Wearable.getNodeClient(context)
 
     /** @throws PhoneUnavailableException */
-    suspend fun send(request: WearRequest): WearResponse {
+    suspend fun send(
+        request: WearRequest,
+        timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+    ): WearResponse {
         val phoneId = findPhone()
         val reply =
             try {
-                withTimeout(TIMEOUT_MILLIS) {
+                withTimeout(timeoutMillis) {
                     messageClient.sendRequest(phoneId, WearProtocol.RPC_PATH, WearProtocol.encode(request)).await()
                 }
             } catch (e: TimeoutCancellationException) {
@@ -95,6 +98,9 @@ class PhoneClient(
         private const val TAG = "AnkiWear"
 
         /** The first request may have to start AnkiDroid and open the collection. */
-        private const val TIMEOUT_MILLIS = 15_000L
+        const val DEFAULT_TIMEOUT_MILLIS = 15_000L
+
+        /** The phone waits up to 45s for AnkiWeb before replying. */
+        const val SYNC_TIMEOUT_MILLIS = 60_000L
     }
 }

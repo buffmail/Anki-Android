@@ -5,8 +5,13 @@
     <string name="decks">Decks</string>
     <string name="no_decks">No decks found on the phone.</string>
     <string name="refresh">Refresh</string>
+    <string name="syncing">Syncing…</string>
+    <string name="sync_failed">Couldn\'t sync with AnkiWeb. Open AnkiDroid on the phone to see why.</string>
+    <string name="sync_still_running">Still syncing on the phone.</string>
+    <string name="sync_not_logged_in">Not synced: log in to AnkiWeb in AnkiDroid on the phone.</string>
+    <string name="sync_offline">Not synced: the phone is offline.</string>
 
-    <string name="show_answer">Show answer</string>
+    <string name="show_answer">Show</string>
     <string name="again">Again</string>
     <string name="good">Good</string>
     <string name="empty_card">(empty)</string>

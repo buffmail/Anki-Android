@@ -16,9 +16,13 @@
 
 package com.ichi2.anki.wear
 
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.await
 import anki.collection.OpChanges
 import anki.scheduler.CardAnswer.Rating
 import anki.scheduler.copy
+import com.ichi2.anki.AnkiDroidApp
 import com.ichi2.anki.CollectionManager.withCol
 import com.ichi2.anki.libanki.Collection
 import com.ichi2.anki.libanki.Consts
@@ -27,6 +31,9 @@ import com.ichi2.anki.libanki.sched.Counts
 import com.ichi2.anki.libanki.sched.CurrentQueueState
 import com.ichi2.anki.libanki.sched.DeckNode
 import com.ichi2.anki.observability.ChangeManager
+import com.ichi2.anki.shouldFetchMedia
+import com.ichi2.anki.syncAuth
+import com.ichi2.anki.wear.protocol.SyncStatus
 import com.ichi2.anki.wear.protocol.WatchCard
 import com.ichi2.anki.wear.protocol.WatchCounts
 import com.ichi2.anki.wear.protocol.WatchDeck
@@ -35,9 +42,16 @@ import com.ichi2.anki.wear.protocol.WatchRating
 import com.ichi2.anki.wear.protocol.WearProtocol
 import com.ichi2.anki.wear.protocol.WearRequest
 import com.ichi2.anki.wear.protocol.WearResponse
+import com.ichi2.anki.worker.SyncWorker
+import com.ichi2.anki.worker.UniqueWorkNames
+import com.ichi2.utils.NetworkUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 /**
@@ -51,6 +65,9 @@ import timber.log.Timber
  * the Wear OS Data Layer.
  */
 object WearRequestHandler {
+    /** How long to wait for a sync before replying. The watch waits a little longer. */
+    private const val SYNC_WAIT_MILLIS = 45_000L
+
     suspend fun handle(
         path: String,
         payload: ByteArray,
@@ -77,7 +94,48 @@ object WearRequestHandler {
             WearRequest.GetDecks -> withCol { deckList() }
             is WearRequest.NextCard -> withCol { studyState(request.deckId) }
             is WearRequest.Answer -> answer(request)
+            WearRequest.Sync -> sync()
         }
+
+    /**
+     * Syncs with AnkiWeb using the same background sync as AnkiDroid's auto sync (one-way syncs
+     * are skipped, as they need the user to choose a side), and waits for it to finish.
+     */
+    private suspend fun sync(): WearResponse.Synced {
+        val auth = syncAuth() ?: return WearResponse.Synced(SyncStatus.NOT_LOGGED_IN)
+        if (!NetworkUtils.isOnline) return WearResponse.Synced(SyncStatus.OFFLINE)
+
+        val context = AnkiDroidApp.instance
+        // joins the sync that is already running, if any
+        SyncWorker.start(context, auth, shouldFetchMedia()).await()
+        // Runs in the app scope so the phone UI is refreshed even if the watch stops waiting.
+        val syncFinished =
+            AnkiDroidApp.applicationScope.async {
+                val state =
+                    WorkManager
+                        .getInstance(context)
+                        .getWorkInfosForUniqueWorkFlow(UniqueWorkNames.SYNC)
+                        .map { infos -> infos.firstOrNull()?.state ?: WorkInfo.State.SUCCEEDED }
+                        .first { it.isFinished }
+                if (state == WorkInfo.State.SUCCEEDED) {
+                    // A background sync doesn't notify the UI by itself: without this, the deck list
+                    // keeps showing the "changes to sync" badge set while answering on the watch.
+                    withContext(Dispatchers.Main) {
+                        ChangeManager.notifySubscribersAllValuesChanged(this@WearRequestHandler)
+                    }
+                }
+                state
+            }
+        val finalState = withTimeoutOrNull(SYNC_WAIT_MILLIS) { syncFinished.await() }
+        Timber.i("Sync requested by the watch: %s", finalState ?: "still running")
+        val status =
+            when (finalState) {
+                null -> SyncStatus.STILL_RUNNING
+                WorkInfo.State.SUCCEEDED -> SyncStatus.DONE
+                else -> SyncStatus.FAILED
+            }
+        return WearResponse.Synced(status)
+    }
 
     private suspend fun answer(request: WearRequest.Answer): WearResponse {
         val (response, changes) =

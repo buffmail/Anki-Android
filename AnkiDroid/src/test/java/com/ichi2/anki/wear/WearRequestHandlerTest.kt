@@ -20,6 +20,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import anki.decks.SetDeckCollapsedRequest
 import com.ichi2.anki.RobolectricTest
 import com.ichi2.anki.libanki.DeckId
+import com.ichi2.anki.wear.protocol.SyncStatus
 import com.ichi2.anki.wear.protocol.WatchQueue
 import com.ichi2.anki.wear.protocol.WatchRating
 import com.ichi2.anki.wear.protocol.WearProtocol
@@ -123,6 +124,13 @@ class WearRequestHandlerTest : RobolectricTest() {
             assertTrue(response.answerSkipped)
             assertEquals(0, reviewCount())
             assertNotNull(response.card)
+        }
+
+    @Test
+    fun `sync without an AnkiWeb login reports it`() =
+        runTest {
+            val response = WearRequestHandler.handle(WearRequest.Sync)
+            assertEquals(WearResponse.Synced(SyncStatus.NOT_LOGGED_IN), response)
         }
 
     @Test

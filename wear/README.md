@@ -3,7 +3,8 @@
 A minimal watch app (built for Galaxy Watch 7) to study existing decks.
 
 - Deck list with new / learning / review counts
-- Study: tap to show the answer, then **Again** or **Good**
+- Study: tap to show the answer, then swipe **left for Again** or **right for Good** (thin red / green arcs on the edges are the reminder). The watch's back button returns to the deck list
+- Back to the deck list after studying: the phone syncs with AnkiWeb, then the counts refresh
 - Text only: images, audio and other media are left out
 
 The phone does all the work. AnkiDroid on the phone owns the collection, picks the next card,

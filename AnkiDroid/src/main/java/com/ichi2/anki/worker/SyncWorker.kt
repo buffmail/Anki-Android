@@ -28,6 +28,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.Operation
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -242,11 +243,12 @@ class SyncWorker(
         private const val ENDPOINT_KEY = "endpoint"
         private const val SYNC_MEDIA_KEY = "syncMedia"
 
+        /** Starts a sync, unless one is already running. */
         fun start(
             context: Context,
             syncAuth: SyncAuth,
             syncMedia: Boolean,
-        ) {
+        ): Operation {
             val constraints =
                 Constraints
                     .Builder()
@@ -268,7 +270,7 @@ class SyncWorker(
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     .build()
 
-            WorkManager
+            return WorkManager
                 .getInstance(context)
                 .enqueueUniqueWork(UniqueWorkNames.SYNC, ExistingWorkPolicy.KEEP, request)
         }

@@ -27,6 +27,7 @@ class WearProtocolTest {
                 WearRequest.GetDecks,
                 WearRequest.NextCard(deckId = 42),
                 WearRequest.Answer(deckId = 42, cardId = 7, rating = WatchRating.GOOD, millisTaken = 1234),
+                WearRequest.Sync,
             )
         for (request in requests) {
             assertEquals(request, WearProtocol.decodeRequest(WearProtocol.encode(request)))
@@ -51,6 +52,7 @@ class WearProtocolTest {
                 WearResponse.Decks(listOf(WatchDeck(id = 1, name = "Vocab", depth = 1, counts = counts))),
                 WearResponse.Study(deckName = "Japanese::Vocab", counts = counts, card = card),
                 WearResponse.Study(deckName = "Japanese", counts = WatchCounts(0, 0, 0), card = null, answerSkipped = true),
+                WearResponse.Synced(SyncStatus.NOT_LOGGED_IN),
                 WearResponse.Error("boom"),
             )
         for (response in responses) {

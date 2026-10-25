@@ -33,6 +33,7 @@ import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.ListHeader
+import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
@@ -41,6 +42,7 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import com.ichi2.anki.wear.DeckListState
 import com.ichi2.anki.wear.DeckListViewModel
 import com.ichi2.anki.wear.R
+import com.ichi2.anki.wear.SyncState
 import com.ichi2.anki.wear.asString
 import com.ichi2.anki.wear.protocol.WatchDeck
 
@@ -49,9 +51,9 @@ fun DeckListScreen(
     viewModel: DeckListViewModel,
     onDeckClick: (WatchDeck) -> Unit,
 ) {
-    // also refreshes the counts when coming back from studying
+    // coming back from studying: sync with AnkiWeb, then refresh the counts
     LifecycleResumeEffect(Unit) {
-        viewModel.refresh()
+        viewModel.onResume()
         onPauseOrDispose { }
     }
 
@@ -64,23 +66,35 @@ fun DeckListScreen(
                 buttonText = stringResource(R.string.retry),
                 onButtonClick = viewModel::refresh,
             )
-        is DeckListState.Loaded -> DeckList(state.decks, onDeckClick, onRefresh = viewModel::refresh)
+        is DeckListState.Loaded ->
+            DeckList(
+                decks = state.decks,
+                syncState = viewModel.syncState,
+                onDeckClick = { deck ->
+                    viewModel.onStudyStarted()
+                    onDeckClick(deck)
+                },
+                onRefresh = viewModel::refresh,
+            )
     }
 }
 
 @Composable
 private fun DeckList(
     decks: List<WatchDeck>,
+    syncState: SyncState,
     onDeckClick: (WatchDeck) -> Unit,
     onRefresh: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+    // the phone's collection is busy while syncing
+    val isSyncing = syncState is SyncState.Syncing
 
     ScreenScaffold(
         scrollState = listState,
         edgeButton = {
-            EdgeButton(onClick = onRefresh, buttonSize = EdgeButtonSize.ExtraSmall) {
+            EdgeButton(onClick = onRefresh, buttonSize = EdgeButtonSize.ExtraSmall, enabled = !isSyncing) {
                 Text(stringResource(R.string.refresh))
             }
         },
@@ -91,7 +105,18 @@ private fun DeckList(
                     modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
-                    Text(stringResource(R.string.decks))
+                    Text(stringResource(if (isSyncing) R.string.syncing else R.string.decks))
+                }
+            }
+            if (syncState is SyncState.Problem) {
+                item {
+                    Text(
+                        syncState.message.asString(),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             if (decks.isEmpty()) {
@@ -102,6 +127,7 @@ private fun DeckList(
             items(decks, key = { it.id }) { deck ->
                 Button(
                     onClick = { onDeckClick(deck) },
+                    enabled = !isSyncing,
                     modifier =
                         Modifier
                             .fillMaxWidth()

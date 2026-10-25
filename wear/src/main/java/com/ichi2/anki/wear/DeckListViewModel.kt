@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ichi2.anki.wear.protocol.SyncStatus
 import com.ichi2.anki.wear.protocol.WatchDeck
 import com.ichi2.anki.wear.protocol.WearRequest
 import com.ichi2.anki.wear.protocol.WearResponse
@@ -39,25 +40,81 @@ sealed interface DeckListState {
     ) : DeckListState
 }
 
+sealed interface SyncState {
+    data object Idle : SyncState
+
+    data object Syncing : SyncState
+
+    /** The last sync didn't complete; [message] says why. */
+    data class Problem(
+        val message: UiMessage,
+    ) : SyncState
+}
+
 class DeckListViewModel(
     private val phone: PhoneClient,
 ) : ViewModel() {
     var state: DeckListState by mutableStateOf(DeckListState.Loading)
         private set
 
-    private var refreshJob: Job? = null
+    var syncState: SyncState by mutableStateOf(SyncState.Idle)
+        private set
+
+    private var job: Job? = null
+    private var syncOnResume = false
+
+    /** Called when a deck is opened: coming back to the list then syncs with AnkiWeb. */
+    fun onStudyStarted() {
+        syncOnResume = true
+    }
+
+    /** The deck list is shown again: sync if coming back from studying, then reload. */
+    fun onResume() {
+        if (syncOnResume) {
+            syncOnResume = false
+            syncAndRefresh()
+        } else {
+            refresh()
+        }
+    }
 
     /** Reload the decks and their counts. The current list stays visible meanwhile. */
     fun refresh() {
-        if (refreshJob?.isActive == true) return
-        refreshJob =
+        if (job?.isActive == true) return
+        job = viewModelScope.launch { loadDecks() }
+    }
+
+    private fun syncAndRefresh() {
+        job?.cancel()
+        job =
             viewModelScope.launch {
-                if (state !is DeckListState.Loaded) state = DeckListState.Loading
-                state =
-                    phone.sendForResult<WearResponse.Decks>(WearRequest.GetDecks).fold(
-                        onSuccess = { DeckListState.Loaded(it.decks) },
-                        onFailure = { DeckListState.Failed(it.uiMessage) },
-                    )
+                syncState = SyncState.Syncing
+                syncState =
+                    phone
+                        .sendForResult<WearResponse.Synced>(WearRequest.Sync, PhoneClient.SYNC_TIMEOUT_MILLIS)
+                        .fold(
+                            onSuccess = { it.status.toSyncState() },
+                            onFailure = { SyncState.Problem(it.uiMessage) },
+                        )
+                loadDecks()
             }
     }
+
+    private suspend fun loadDecks() {
+        if (state !is DeckListState.Loaded) state = DeckListState.Loading
+        state =
+            phone.sendForResult<WearResponse.Decks>(WearRequest.GetDecks).fold(
+                onSuccess = { DeckListState.Loaded(it.decks) },
+                onFailure = { DeckListState.Failed(it.uiMessage) },
+            )
+    }
+
+    private fun SyncStatus.toSyncState(): SyncState =
+        when (this) {
+            SyncStatus.DONE -> SyncState.Idle
+            SyncStatus.FAILED -> SyncState.Problem(UiMessage.Resource(R.string.sync_failed))
+            SyncStatus.STILL_RUNNING -> SyncState.Problem(UiMessage.Resource(R.string.sync_still_running))
+            SyncStatus.NOT_LOGGED_IN -> SyncState.Problem(UiMessage.Resource(R.string.sync_not_logged_in))
+            SyncStatus.OFFLINE -> SyncState.Problem(UiMessage.Resource(R.string.sync_offline))
+        }
 }
