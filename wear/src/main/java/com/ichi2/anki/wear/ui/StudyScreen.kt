@@ -364,8 +364,8 @@ private fun BoxScope.AnswerHints() {
                 arcTo(circle, startAngleDegrees = 180 - halfAngle, sweepAngleDegrees = 2 * halfAngle, forceMoveTo = true)
                 close()
             }
-        drawPath(good, goodColor.copy(alpha = 0.4f))
-        drawPath(again, againColor.copy(alpha = 0.35f))
+        drawPath(good, goodColor.copy(alpha = 0.55f))
+        drawPath(again, againColor.copy(alpha = 0.5f))
     }
 }
 
