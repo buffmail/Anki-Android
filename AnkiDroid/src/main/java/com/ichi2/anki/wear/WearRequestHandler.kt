@@ -16,17 +16,21 @@
 
 package com.ichi2.anki.wear
 
+import androidx.annotation.VisibleForTesting
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.await
 import anki.collection.OpChanges
 import anki.scheduler.CardAnswer.Rating
 import anki.scheduler.copy
+import anki.search.SearchNodeKt
+import anki.search.searchNode
 import com.ichi2.anki.AnkiDroidApp
 import com.ichi2.anki.CollectionManager.withCol
 import com.ichi2.anki.libanki.Collection
 import com.ichi2.anki.libanki.Consts
 import com.ichi2.anki.libanki.DeckId
+import com.ichi2.anki.libanki.NoteId
 import com.ichi2.anki.libanki.sched.Counts
 import com.ichi2.anki.libanki.sched.CurrentQueueState
 import com.ichi2.anki.libanki.sched.DeckNode
@@ -55,11 +59,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 /**
- * Serves the AnkiDroid watch app: lists decks, hands out the next card and records answers.
+ * Serves the AnkiDroid watch app: lists decks, hands out the next card, records answers and
+ * adds words.
  *
  * Studying on the watch works like studying on the phone: the watch's deck becomes the
  * selected deck, and answers go through the normal scheduler (so undo, sync and stats behave
  * as usual).
+ *
+ * Words added on the watch are looked up with anki-new-card and saved as Basic notes, like
+ * the website and `ank.py` do: the word on the front, lowercase, and its meanings on the back.
  *
  * Transport-independent: `WearBridgeService` (play flavor) passes in what it receives over
  * the Wear OS Data Layer.
@@ -67,6 +75,15 @@ import timber.log.Timber
 object WearRequestHandler {
     /** How long to wait for a sync before replying. The watch waits a little longer. */
     private const val SYNC_WAIT_MILLIS = 45_000L
+
+    /** Note type of vocabulary cards (as in `ank.py`). Existing words are looked for in it. */
+    private const val WORD_NOTETYPE = "Basic"
+    private const val FRONT = "Front"
+    private const val BACK = "Back"
+
+    /** Looks up words added on the watch. Replaced in tests. */
+    @VisibleForTesting
+    var wordLookup: WordLookup = AnkiNewCardLookup { GeminiApiKey.get(AnkiDroidApp.instance) }
 
     suspend fun handle(
         path: String,
@@ -95,7 +112,106 @@ object WearRequestHandler {
             is WearRequest.NextCard -> withCol { studyState(request.deckId) }
             is WearRequest.Answer -> answer(request)
             WearRequest.Sync -> sync()
+            is WearRequest.LookUpWord -> lookUpWord(request)
+            is WearRequest.AddWord -> addWord(request)
         }
+
+    /** Looks [WearRequest.LookUpWord.word] up and says whether it's already in the collection. */
+    private suspend fun lookUpWord(request: WearRequest.LookUpWord): WearResponse {
+        val word = WordCard.normalize(request.word)
+        require(word.isNotEmpty()) { "Type a word to look up." }
+        val definition =
+            try {
+                wordLookup.lookUp(word)
+            } catch (e: MissingApiKeyException) {
+                return WearResponse.NoApiKey
+            }
+        val back = WordCard.back(definition)
+        return withCol {
+            val existing = findWordNotes(word)
+            val deckId =
+                request.preferredDeckId?.takeIf { canAddTo(it) }
+                    ?: defaultsForAdding().deckId
+            WearResponse.WordPreview(
+                word = word,
+                back = back,
+                preview = WatchCardFormatter.toWatchHtml(back),
+                existingNotes = existing.size,
+                existingDeckName = existing.firstOrNull()?.let { deckNameOf(it) },
+                deckId = deckId,
+                deckName = decks.name(deckId),
+            )
+        }
+    }
+
+    /**
+     * Adds the word as a new Basic note, or, if notes already have it on the front, updates
+     * their back instead (like `ank.py --add`): their deck and scheduling stay as they are.
+     */
+    private suspend fun addWord(request: WearRequest.AddWord): WearResponse {
+        val word = WordCard.normalize(request.word)
+        require(word.isNotEmpty()) { "Type a word to add." }
+        require(request.back.isNotBlank()) { "Nothing to add. Look the word up again." }
+        val (response, changes) =
+            withCol<Pair<WearResponse, OpChanges>> {
+                val existing = findWordNotes(word)
+                if (existing.isNotEmpty()) {
+                    val notes =
+                        existing.map { id ->
+                            getNote(id).apply {
+                                setItem(FRONT, word)
+                                setItem(BACK, request.back)
+                            }
+                        }
+                    val changes = updateNotes(notes)
+                    Timber.i("Watch updated %d note(s)", notes.size)
+                    return@withCol WearResponse.WordAdded(word, deckNameOf(existing.first()), notes.size) to changes
+                }
+
+                require(canAddTo(request.deckId)) { "Can't add to this deck. Choose another one." }
+                val notetype =
+                    requireNotNull(notetypes.byName(WORD_NOTETYPE)) {
+                        "AnkiDroid on the phone has no \"$WORD_NOTETYPE\" note type."
+                    }
+                val note = newNote(notetype)
+                require(FRONT in note && BACK in note) {
+                    "The \"$WORD_NOTETYPE\" note type needs $FRONT and $BACK fields."
+                }
+                note.setItem(FRONT, word)
+                note.setItem(BACK, request.back)
+                val changes = addNote(note, request.deckId).changes
+                Timber.i("Watch added note %d", note.id)
+                WearResponse.WordAdded(word, decks.name(request.deckId), updatedNotes = 0) to changes
+            }
+        notifyPhoneUi(changes)
+        return response
+    }
+
+    /**
+     * Basic notes with [word] on the front, oldest first. The match is on the field itself and
+     * ignores case (unlike Anki's duplicate check, which would treat "Artefact" and "artefact"
+     * as different words), as in `ank.py`.
+     */
+    private fun Collection.findWordNotes(word: String): List<NoteId> {
+        val query =
+            buildSearchString(
+                listOf(
+                    searchNode { note = WORD_NOTETYPE },
+                    searchNode {
+                        field =
+                            SearchNodeKt.field {
+                                fieldName = FRONT
+                                text = word
+                            }
+                    },
+                ),
+            )
+        return findNotes(query).sorted()
+    }
+
+    private fun Collection.deckNameOf(noteId: NoteId): String = decks.name(getNote(noteId).cards(this).first().did)
+
+    private fun Collection.canAddTo(deckId: DeckId): Boolean = decks.have(deckId) && !decks.isFiltered(deckId)
 
     /**
      * Syncs with AnkiWeb using the same background sync as AnkiDroid's auto sync (one-way syncs

@@ -1,11 +1,14 @@
 # AnkiDroid for Wear OS
 
-A minimal watch app (built for Galaxy Watch 7) to study existing decks.
+A minimal watch app (built for Galaxy Watch 7) to study existing decks and add English words.
 
 - Deck list with new / learning / review counts
 - Study: tap to show the answer, then swipe **left for Again** or **right for Good** (thin red / green arcs on the edges are the reminder). The watch's back button returns to the deck list
 - Back to the deck list after studying: the phone syncs with AnkiWeb, then the counts refresh
 - Text only: images, audio and other media are left out
+- **Add word** (top of the deck list): type, write or say an English word, check its meanings,
+  pick a deck and add it. The meanings come from [anki-new-card](https://anki-new-card.vercel.app),
+  so the card looks like the ones added from the website or `ank.py`
 
 The phone does all the work. AnkiDroid on the phone owns the collection, picks the next card,
 schedules the answers and syncs with AnkiWeb as usual. The watch shows the cards and sends back
@@ -21,9 +24,37 @@ so it needs the phone nearby.
 | Phone-side handler: decks, next card, answers | `AnkiDroid/src/main/java/com/ichi2/anki/wear/WearRequestHandler.kt` |
 | Card HTML → watch-friendly HTML | `AnkiDroid/src/main/java/com/ichi2/anki/wear/WatchCardFormatter.kt` |
 | Phone-side Data Layer service (`play` flavor only) | `AnkiDroid/src/play/java/com/ichi2/anki/wear/WearBridgeService.kt` |
+| Word lookup (anki-new-card) and the card's back | `AnkiDroid/src/main/java/com/ichi2/anki/wear/WordLookup.kt`, `WordCard.kt` |
+| Gemini API key, stored encrypted | `AnkiDroid/src/main/java/com/ichi2/anki/wear/GeminiApiKey.kt` |
 
 Studying on the watch behaves like studying on the phone: the watch's deck becomes the
 selected deck on the phone, and answers show up in the phone's stats, undo history and next sync.
+
+## Adding words
+
+1. **Once, on the phone:** *AnkiDroid → Settings → Advanced → Watch → Gemini API key*, and paste
+   your key from [Google AI Studio](https://aistudio.google.com/). Leave it empty to remove it.
+2. **On the watch:** *Add word* at the top of the deck list. The watch's input screen opens:
+   keyboard, handwriting or voice (switch the voice language to English for single words).
+3. The watch shows the meanings, examples and IPA that will go on the back of the card. Tap
+   *Deck* to pick another deck, then *Add*. The deck is remembered for next time; the first
+   time it's the deck the phone's Add screen would pick.
+4. Back on the deck list, the phone syncs with AnkiWeb.
+
+What gets added: a **Basic** note, the word lowercase on the front and the meanings on the back,
+built like the website builds them. If a Basic note already has the word on its front (any case),
+the watch offers *Update* instead: the back is replaced, and the note keeps its deck and schedule
+(like `ank.py --add`).
+
+Where the Gemini API key lives:
+
+- **Only on the phone**, typed into the setting above. Not in the source code or the APK, and the
+  watch never sees it: the watch sends the word, the phone does the lookup.
+- **Encrypted** with an AES key kept in the Android Keystore. AnkiDroid allows Android backups, so
+  the stored value may end up in a Google Drive backup, but no other device can decrypt it. After
+  restoring to a new phone, set the key again (the watch tells you to).
+- **Sent** only to `https://anki-new-card.vercel.app/api/gemini`, in the body of an HTTPS request,
+  as the website and `ank.py` send it.
 
 ## Requirements
 
@@ -77,5 +108,8 @@ adb -s <ip>:<port> install -r wear/release/wear-release.apk
 | *AnkiDroid with watch support isn't on the phone* | The phone app is an older build without the bridge, or it was built with a different key or application ID (debug vs release). |
 | *AnkiDroid on the phone didn't answer in time* | The phone was busy (e.g. syncing a large collection). Try again. |
 | *The phone and watch apps don't match* | One side is older. Rebuild and install both. |
+| *Set your Gemini API key on the phone…* | No key yet, or the phone was restored from a backup. See [Adding words](#adding-words). |
+| *Couldn't reach anki-new-card…* | The phone is offline, or anki-new-card is down. |
+| *API 호출 제한에 도달했습니다…* and other Gemini errors | Passed on from anki-new-card: rate limit or a wrong API key. |
 
 Logs: `adb -s <watch> logcat -s AnkiWear` on the watch; `adb -s <phone> logcat | grep -i watch` on the phone.

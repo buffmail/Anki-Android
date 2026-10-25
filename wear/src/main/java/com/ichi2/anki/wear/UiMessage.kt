@@ -49,6 +49,7 @@ suspend inline fun <reified T : WearResponse> PhoneClient.sendForResult(
         when (val response = send(request, timeoutMillis)) {
             is T -> Result.success(response)
             is WearResponse.Error -> Result.failure(PhoneError(UiMessage.Text(response.message)))
+            WearResponse.NoApiKey -> Result.failure(PhoneError(UiMessage.Resource(R.string.no_api_key)))
             else -> Result.failure(PhoneError(UiMessage.Resource(R.string.error_app_mismatch)))
         }
     } catch (e: PhoneUnavailableException) {

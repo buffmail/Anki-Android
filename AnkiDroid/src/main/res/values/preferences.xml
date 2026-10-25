@@ -196,6 +196,8 @@
     <string name="pref_cat_plugins_key">category_plugins</string>
     <string name="enable_api_key">providerEnabled</string>
     <string name="thirdparty_apps_key">thirdpartyapps_link</string>
+    <string name="pref_cat_watch_key">category_watch</string>
+    <string name="gemini_api_key_pref_key">watchGeminiApiKey</string>
     <string name="tts_key">tts</string>
     <string name="double_scrolling_gap_key">double_scrolling</string>
     <string name="html_javascript_debugging_key">html_javascript_debugging</string>

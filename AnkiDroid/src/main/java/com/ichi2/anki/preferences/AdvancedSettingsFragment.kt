@@ -18,6 +18,7 @@ package com.ichi2.anki.preferences
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.text.InputType
 import androidx.appcompat.app.AlertDialog
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
@@ -33,6 +34,7 @@ import com.ichi2.anki.provider.CardContentProvider
 import com.ichi2.anki.settings.Prefs
 import com.ichi2.anki.snackbar.showSnackbar
 import com.ichi2.anki.utils.openUrl
+import com.ichi2.anki.wear.GeminiApiKey
 import com.ichi2.compat.CompatHelper
 import com.ichi2.utils.show
 import timber.log.Timber
@@ -132,7 +134,32 @@ class AdvancedSettingsFragment : SettingsFragment() {
             requireActivity().packageManager.setComponentEnabledSetting(providerName, state, PackageManager.DONT_KILL_APP)
         }
 
+        setupGeminiApiKeyPreference()
+
         setupNewStudyScreenSettings()
+    }
+
+    /**
+     * The Gemini API key for adding words from the watch. It is saved encrypted by [GeminiApiKey],
+     * not by the preference, and never shown again once saved.
+     */
+    private fun setupGeminiApiKeyPreference() {
+        requirePreference<EditTextPreference>(R.string.gemini_api_key_pref_key).apply {
+            fun updateSummary() {
+                val isSet = GeminiApiKey.isSet(requireContext())
+                summary = getString(if (isSet) R.string.gemini_api_key_summary_set else R.string.gemini_api_key_summary_not_set)
+            }
+            updateSummary()
+            setOnBindEditTextListener { editText ->
+                editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            setOnPreferenceChangeListener { _, newValue ->
+                GeminiApiKey.set(requireContext(), newValue as String)
+                updateSummary()
+                // keep the preference itself empty
+                false
+            }
+        }
     }
 
     private fun removeUnnecessaryAdvancedPrefs() {

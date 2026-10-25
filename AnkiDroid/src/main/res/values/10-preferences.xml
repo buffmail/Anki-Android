@@ -470,6 +470,11 @@ this formatter is used if the bind only applies to the answer">A: %s</string>
         ><![CDATA[Improved study screen that will succeed the current one. Some features of the old screen have been changed or removed. Please report any <a href="%1$s">feedback</a> or <a href="%2$s">bugs</a>.]]></string>
     <string name="show_answer_feedback" maxLength="41">Show answer feedback</string>
     <string name="screen" maxLength="41">Screen</string>
+    <string name="pref_cat_watch" maxLength="41">Watch</string>
+    <string name="gemini_api_key_title" maxLength="41">Gemini API key</string>
+    <string name="gemini_api_key_summary_set">Set. Words added on the watch are looked up with it</string>
+    <string name="gemini_api_key_summary_not_set">Not set. Needed to add words from the watch</string>
+    <string name="gemini_api_key_dialog_message">Paste your key from Google AI Studio. It is stored encrypted on this phone. Leave empty to remove it.</string>
 
     <!--Keyboard shortcuts dialog-->
     <string name="open_settings" comment="Description of the shortcut that opens the app settings">Open settings</string>

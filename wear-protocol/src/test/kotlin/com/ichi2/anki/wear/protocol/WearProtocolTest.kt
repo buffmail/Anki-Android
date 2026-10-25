@@ -28,6 +28,9 @@ class WearProtocolTest {
                 WearRequest.NextCard(deckId = 42),
                 WearRequest.Answer(deckId = 42, cardId = 7, rating = WatchRating.GOOD, millisTaken = 1234),
                 WearRequest.Sync,
+                WearRequest.LookUpWord("Cupboard"),
+                WearRequest.LookUpWord("cupboard", preferredDeckId = 42),
+                WearRequest.AddWord(deckId = 42, word = "cupboard", back = "a cabinet<br><i> - in the cupboard</i>"),
             )
         for (request in requests) {
             assertEquals(request, WearProtocol.decodeRequest(WearProtocol.encode(request)))
@@ -54,6 +57,17 @@ class WearProtocolTest {
                 WearResponse.Study(deckName = "Japanese", counts = WatchCounts(0, 0, 0), card = null, answerSkipped = true),
                 WearResponse.Synced(SyncStatus.NOT_LOGGED_IN),
                 WearResponse.Error("boom"),
+                WearResponse.WordPreview(
+                    word = "cupboard",
+                    back = "a cabinet<br><span style=\"font-size: small;\"><i> - in the cupboard</i></span>",
+                    preview = "a cabinet<br><i> - in the cupboard</i>",
+                    existingNotes = 1,
+                    existingDeckName = "English",
+                    deckId = 42,
+                    deckName = "English",
+                ),
+                WearResponse.WordAdded(word = "cupboard", deckName = "English", updatedNotes = 0),
+                WearResponse.NoApiKey,
             )
         for (response in responses) {
             assertEquals(response, WearProtocol.decodeResponse(WearProtocol.encode(response)))

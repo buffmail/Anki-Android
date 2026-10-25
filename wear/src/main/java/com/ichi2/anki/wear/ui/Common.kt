@@ -56,10 +56,18 @@ fun countsText(counts: WatchCounts): AnnotatedString =
     }
 
 @Composable
-fun LoadingScreen() {
+fun LoadingScreen(message: String? = null) {
     ScreenScaffold {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
+            if (message != null) {
+                Text(
+                    message,
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }

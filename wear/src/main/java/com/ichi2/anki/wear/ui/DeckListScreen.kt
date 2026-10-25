@@ -50,6 +50,7 @@ import com.ichi2.anki.wear.protocol.WatchDeck
 fun DeckListScreen(
     viewModel: DeckListViewModel,
     onDeckClick: (WatchDeck) -> Unit,
+    onAddWord: () -> Unit,
 ) {
     // coming back from studying: sync with AnkiWeb, then refresh the counts
     LifecycleResumeEffect(Unit) {
@@ -74,6 +75,7 @@ fun DeckListScreen(
                     viewModel.onStudyStarted()
                     onDeckClick(deck)
                 },
+                onAddWord = onAddWord,
                 onRefresh = viewModel::refresh,
             )
     }
@@ -84,6 +86,7 @@ private fun DeckList(
     decks: List<WatchDeck>,
     syncState: SyncState,
     onDeckClick: (WatchDeck) -> Unit,
+    onAddWord: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
@@ -107,6 +110,15 @@ private fun DeckList(
                 ) {
                     Text(stringResource(if (isSyncing) R.string.syncing else R.string.decks))
                 }
+            }
+            item {
+                Button(
+                    onClick = onAddWord,
+                    enabled = !isSyncing,
+                    modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
+                    transformation = SurfaceTransformation(transformationSpec),
+                    label = { Text(stringResource(R.string.add_word)) },
+                )
             }
             if (syncState is SyncState.Problem) {
                 item {

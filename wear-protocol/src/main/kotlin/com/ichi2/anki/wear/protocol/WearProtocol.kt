@@ -33,7 +33,7 @@ import kotlinx.serialization.json.Json
  * running different versions report a clear error instead of misbehaving.
  */
 object WearProtocol {
-    const val VERSION = 2
+    const val VERSION = 3
     const val PATH_PREFIX = "/ankidroid"
     const val RPC_PATH = "$PATH_PREFIX/v$VERSION"
 
@@ -91,6 +91,32 @@ sealed interface WearRequest {
     @Serializable
     @SerialName("sync")
     data object Sync : WearRequest
+
+    /**
+     * Look up an English word with anki-new-card (Gemini), as the website does. Replied with
+     * [WearResponse.WordPreview], or [WearResponse.NoApiKey] if the phone has no Gemini API key.
+     */
+    @Serializable
+    @SerialName("lookup")
+    data class LookUpWord(
+        /** As typed or spoken; the phone trims and lowercases it. */
+        val word: String,
+        /** Deck the watch added to last time. Ignored if it no longer exists. */
+        val preferredDeckId: Long? = null,
+    ) : WearRequest
+
+    /**
+     * Add [word] to [deckId] as a Basic note, or update the notes that already have it on the
+     * front (their deck and scheduling stay as they are). Replied with [WearResponse.WordAdded].
+     */
+    @Serializable
+    @SerialName("add")
+    data class AddWord(
+        val deckId: Long,
+        val word: String,
+        /** [WearResponse.WordPreview.back], unchanged. */
+        val back: String,
+    ) : WearRequest
 }
 
 @Serializable
@@ -125,6 +151,40 @@ sealed interface WearResponse {
     data class Synced(
         val status: SyncStatus,
     ) : WearResponse
+
+    @Serializable
+    @SerialName("word")
+    data class WordPreview(
+        /** Lowercased, as it goes on the front of the card. */
+        val word: String,
+        /** Back of the card, as HTML, built like the website builds it. */
+        val back: String,
+        /** [back] simplified for the watch. */
+        val preview: String,
+        /** Notes that already have [word] on the front. Adding updates them instead. */
+        val existingNotes: Int,
+        /** Deck of the first existing note; `null` when the word is new. */
+        val existingDeckName: String?,
+        /** The requested deck if it still exists, otherwise the phone's default deck for adding. */
+        val deckId: Long,
+        /** Full name of [deckId]. */
+        val deckName: String,
+    ) : WearResponse
+
+    @Serializable
+    @SerialName("added")
+    data class WordAdded(
+        val word: String,
+        /** Full name of the deck the note is in. */
+        val deckName: String,
+        /** Number of existing notes updated; 0 when a new note was added. */
+        val updatedNotes: Int,
+    ) : WearResponse
+
+    /** The phone has no Gemini API key: it's set in AnkiDroid's settings on the phone. */
+    @Serializable
+    @SerialName("no_api_key")
+    data object NoApiKey : WearResponse
 
     @Serializable
     @SerialName("error")

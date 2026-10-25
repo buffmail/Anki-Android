@@ -24,4 +24,20 @@
     <string name="error_phone_app_missing">AnkiDroid with watch support isn\'t on the phone. Install the phone build from the same project, signed with the same key.</string>
     <string name="error_phone_timeout">AnkiDroid on the phone didn\'t answer in time.</string>
     <string name="error_app_mismatch">The phone and watch apps don\'t match. Update both.</string>
+
+    <string name="add_word">Add word</string>
+    <string name="add_word_input_label">English word</string>
+    <string name="looking_up">Looking up “%s”…</string>
+    <string name="add">Add</string>
+    <string name="update">Update</string>
+    <string name="deck">Deck</string>
+    <string name="already_in_deck">Already in %s. Update keeps its review schedule.</string>
+    <string name="type_again">Type again</string>
+    <string name="choose_deck">Add to</string>
+    <string name="word_added">Added</string>
+    <string name="word_updated">Updated</string>
+    <string name="word_added_message">“%1$s” in %2$s</string>
+    <string name="add_another">Add another</string>
+    <string name="add_failed_title">Couldn\'t add the word</string>
+    <string name="no_api_key">Set your Gemini API key on the phone: AnkiDroid › Settings › Advanced › Gemini API key.</string>
 </resources>

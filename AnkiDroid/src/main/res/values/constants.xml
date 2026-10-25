@@ -312,6 +312,7 @@
     <string-array name="advanced_summary_entries">
         <item>@string/pref_cat_workarounds</item>
         <item>@string/pref_cat_plugins</item>
+        <item>@string/pref_cat_watch</item>
     </string-array>
 
     <!-- Sample deck names and for Deck Picker Widget layout in widget picker screen

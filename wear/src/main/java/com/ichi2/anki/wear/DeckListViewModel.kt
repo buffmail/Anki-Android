@@ -68,6 +68,11 @@ class DeckListViewModel(
         syncOnResume = true
     }
 
+    /** Called when a word was added or updated: coming back to the list then syncs with AnkiWeb. */
+    fun onWordAdded() {
+        syncOnResume = true
+    }
+
     /** The deck list is shown again: sync if coming back from studying, then reload. */
     fun onResume() {
         if (syncOnResume) {

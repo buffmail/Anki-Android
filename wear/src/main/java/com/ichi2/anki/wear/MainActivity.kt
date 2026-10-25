@@ -16,6 +16,7 @@
 
 package com.ichi2.anki.wear
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,6 +34,8 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import com.ichi2.anki.wear.ui.AddWordScreen
+import com.ichi2.anki.wear.ui.ChooseDeckScreen
 import com.ichi2.anki.wear.ui.DeckListScreen
 import com.ichi2.anki.wear.ui.StudyScreen
 
@@ -46,6 +49,8 @@ class MainActivity : ComponentActivity() {
 private const val DECKS_ROUTE = "decks"
 private const val DECK_ID_ARG = "deckId"
 private const val STUDY_ROUTE = "study/{$DECK_ID_ARG}"
+private const val ADD_WORD_ROUTE = "add"
+private const val ADD_WORD_DECK_ROUTE = "add/deck"
 
 @Composable
 private fun WearApp() {
@@ -67,6 +72,26 @@ private fun WearApp() {
                     DeckListScreen(
                         viewModel = viewModel { DeckListViewModel(phone) },
                         onDeckClick = { deck -> navController.navigate("study/${deck.id}") },
+                        onAddWord = { navController.navigate(ADD_WORD_ROUTE) },
+                    )
+                }
+                composable(ADD_WORD_ROUTE) { entry ->
+                    // shared with the deck list, which syncs when shown again after a word was added
+                    val decksEntry = remember(entry) { navController.getBackStackEntry(DECKS_ROUTE) }
+                    val deckListViewModel = viewModel(decksEntry) { DeckListViewModel(phone) }
+                    AddWordScreen(
+                        viewModel = viewModel { addWordViewModel(context, phone) },
+                        onChooseDeck = { navController.navigate(ADD_WORD_DECK_ROUTE) },
+                        onWordAdded = deckListViewModel::onWordAdded,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(ADD_WORD_DECK_ROUTE) { entry ->
+                    // the deck is picked for the word shown on the previous screen
+                    val addWordEntry = remember(entry) { navController.getBackStackEntry(ADD_WORD_ROUTE) }
+                    ChooseDeckScreen(
+                        viewModel = viewModel(addWordEntry) { addWordViewModel(context, phone) },
+                        onChosen = { navController.popBackStack() },
                     )
                 }
                 composable(
@@ -84,3 +109,11 @@ private fun WearApp() {
         }
     }
 }
+
+private fun addWordViewModel(
+    context: Context,
+    phone: PhoneClient,
+) = AddWordViewModel(
+    phone,
+    context.applicationContext.getSharedPreferences(AddWordViewModel.PREFS_NAME, Context.MODE_PRIVATE),
+)

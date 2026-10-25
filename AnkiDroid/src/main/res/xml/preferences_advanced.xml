@@ -108,6 +108,17 @@
                 android:title="@string/thirdparty_apps_title">
             </Preference>
         </PreferenceCategory>
+        <!-- Words added from the watch app are looked up with anki-new-card (Gemini) -->
+        <PreferenceCategory
+            android:key="@string/pref_cat_watch_key"
+            android:title="@string/pref_cat_watch" >
+            <!-- Not persisted by the preference: GeminiApiKey stores it encrypted -->
+            <EditTextPreference
+                android:key="@string/gemini_api_key_pref_key"
+                android:title="@string/gemini_api_key_title"
+                android:dialogMessage="@string/gemini_api_key_dialog_message"
+                android:persistent="false" />
+        </PreferenceCategory>
     <SwitchPreferenceCompat
         android:defaultValue="false"
         android:icon="@drawable/ic_warning"
