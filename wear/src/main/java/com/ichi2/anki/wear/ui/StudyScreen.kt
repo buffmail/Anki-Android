@@ -52,12 +52,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -91,10 +89,20 @@ import com.ichi2.anki.wear.protocol.WatchCounts
 import com.ichi2.anki.wear.protocol.WatchRating
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.acos
 import kotlin.math.roundToInt
 
 private val againColor = Color(0xFFC62828)
 private val goodColor = Color(0xFF2E7D32)
+
+/** Space left and right of the card text, as a fraction of the screen width. */
+private const val TEXT_SIDE_FRACTION = 0.12f
+
+/**
+ * The answer hints stop this far (as a fraction of the screen width) from the screen's rim,
+ * leaving the rim to the scroll indicator.
+ */
+private const val HINT_RIM_GAP_FRACTION = 0.04f
 
 /** How long the screen stays on after the last tap. Longer than the watch's own timeout. */
 private const val KEEP_SCREEN_ON_MILLIS = 60_000L
@@ -243,7 +251,7 @@ internal fun CardScreen(
                         .rotaryScrollable(
                             RotaryScrollableDefaults.behavior(scrollableState = scrollState),
                             focusRequester = focusRequester,
-                        ).padding(horizontal = screenWidth * 0.12f),
+                        ).padding(horizontal = screenWidth * TEXT_SIDE_FRACTION),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Spacer(Modifier.height(screenWidth * 0.2f))
@@ -329,19 +337,35 @@ private fun BoxScope.AnswerFlash(
 }
 
 /**
- * Thin arcs on the screen edge: red on the left (tap there for Again), green on the right (Good).
- * They sit in the lower half so the right one stays clear of the scroll indicator at 3 o'clock.
+ * Tints the screen outside the card text: red on the left (tap there for Again), green on the
+ * right (Good). On the round screen these are two half-moons centered on 9 and 3 o'clock; they
+ * never overlap the text, and stop short of the rim so the scroll indicator stays on black.
+ * They only hint at the sides: the tap areas are the wider bands of [ANSWER_BAND_FRACTION].
  */
 @Composable
 private fun BoxScope.AnswerHints() {
-    Canvas(Modifier.matchParentSize().padding(3.dp)) {
-        val strokeWidth = 4.dp.toPx()
-        val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-        val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
-        val stroke = Stroke(strokeWidth, cap = StrokeCap.Round)
-        // angles in degrees, clockwise from 3 o'clock: about 4-5 o'clock and 7-8 o'clock
-        drawArc(goodColor, startAngle = 25f, sweepAngle = 40f, useCenter = false, topLeft, arcSize, style = stroke)
-        drawArc(againColor, startAngle = 115f, sweepAngle = 40f, useCenter = false, topLeft, arcSize, style = stroke)
+    Canvas(Modifier.matchParentSize()) {
+        val center = this.center
+        val radius = size.minDimension / 2 - size.width * HINT_RIM_GAP_FRACTION
+        // distance from the center to the edge of the text, horizontally
+        val textHalfWidth = size.width / 2 - size.width * TEXT_SIDE_FRACTION
+        if (textHalfWidth >= radius) return@Canvas
+        // where the edge of the text meets the circle, as an angle from 3 o'clock
+        val halfAngle = Math.toDegrees(acos(textHalfWidth / radius).toDouble()).toFloat()
+        val circle = Rect(center, radius)
+
+        val good =
+            Path().apply {
+                arcTo(circle, startAngleDegrees = -halfAngle, sweepAngleDegrees = 2 * halfAngle, forceMoveTo = true)
+                close()
+            }
+        val again =
+            Path().apply {
+                arcTo(circle, startAngleDegrees = 180 - halfAngle, sweepAngleDegrees = 2 * halfAngle, forceMoveTo = true)
+                close()
+            }
+        drawPath(good, goodColor.copy(alpha = 0.4f))
+        drawPath(again, againColor.copy(alpha = 0.35f))
     }
 }
 
