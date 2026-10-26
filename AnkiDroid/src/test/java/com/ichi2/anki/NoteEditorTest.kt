@@ -369,9 +369,16 @@ class NoteEditorTest : RobolectricTest() {
     }
 
     @Test
+    fun `opening the editor focuses no field, so no keyboard pops up`() {
+        // fork choice (ef99a2a188): adding from the browser shouldn't open the keyboard
+        val editor = getNoteEditorAddingNote(DECK_LIST)
+        assertFalse(editor.getFieldForTest(0).hasFocus(), "first field isn't focused")
+    }
+
+    @Test
     fun insertIntoFocusedFieldStartsAtSelection() {
         val editor = getNoteEditorAddingNote(DECK_LIST)
-        val field: EditText = editor.getFieldForTest(0)
+        val field: EditText = editor.getFieldForTest(0).focused()
         editor.insertStringInField(field, "Hello")
         field.setSelection(3)
         editor.insertStringInField(field, "World")
@@ -381,7 +388,7 @@ class NoteEditorTest : RobolectricTest() {
     @Test
     fun insertIntoFocusedFieldReplacesSelection() {
         val editor = getNoteEditorAddingNote(DECK_LIST)
-        val field: EditText = editor.getFieldForTest(0)
+        val field: EditText = editor.getFieldForTest(0).focused()
         editor.insertStringInField(field, "12345")
         field.setSelection(2, 3) // select "3"
         editor.insertStringInField(field, "World")
@@ -392,7 +399,7 @@ class NoteEditorTest : RobolectricTest() {
     fun insertIntoFocusedFieldReplacesSelectionIfBackwards() {
         // selections can be backwards if the user uses keyboards
         val editor = getNoteEditorAddingNote(DECK_LIST)
-        val field: EditText = editor.getFieldForTest(0)
+        val field: EditText = editor.getFieldForTest(0).focused()
         editor.insertStringInField(field, "12345")
         field.setSelection(3, 2) // select "3" (right to left)
         editor.insertStringInField(field, "World")
@@ -655,6 +662,12 @@ class NoteEditorTest : RobolectricTest() {
         val editor = getNoteEditorAddingNote(from)
         editor.block()
     }
+
+    /**
+     * Focuses this field, as tapping it does. The editor doesn't focus a field by itself, and
+     * text is only inserted at the selection of a focused field.
+     */
+    private fun EditText.focused(): EditText = apply { assertTrue(requestFocus(), "field took the focus") }
 
     private fun moveToDynamicDeck(note: Note): DeckId {
         val dyn = addDynamicDeck("All")
