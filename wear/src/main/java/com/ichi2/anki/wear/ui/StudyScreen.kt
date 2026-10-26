@@ -65,15 +65,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.DeviceFontFamilyName
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.CurvedTextStyle
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
@@ -82,8 +77,6 @@ import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
-import androidx.wear.compose.material3.TimeText
-import androidx.wear.compose.material3.timeTextCurvedText
 import com.ichi2.anki.wear.R
 import com.ichi2.anki.wear.StudyState
 import com.ichi2.anki.wear.StudyViewModel
@@ -180,7 +173,7 @@ internal fun CardScreen(
 
     LaunchedEffect(state.sequence) { scrollState.scrollTo(0) }
 
-    // After revealing, scroll so that the answer starts just below the clock.
+    // After revealing, scroll so that the answer starts near the top.
     var answerTop by remember(state.sequence) { mutableStateOf<Int?>(null) }
     LaunchedEffect(answerTop) {
         val top = answerTop ?: return@LaunchedEffect
@@ -224,7 +217,8 @@ internal fun CardScreen(
 
     ScreenScaffold(
         scrollState = scrollState,
-        timeText = { CardsLeftText(state.counts) },
+        // nothing pinned at the top: it would sit on the text whenever scrolling stops
+        timeText = {},
     ) { _ ->
         Box(
             Modifier
@@ -263,7 +257,7 @@ internal fun CardScreen(
                         ).padding(horizontal = screenWidth * TEXT_SIDE_FRACTION),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Spacer(Modifier.height(screenWidth * 0.2f))
+                CardsLeft(state.counts, Modifier.fillMaxWidth().height(screenWidth * 0.2f))
                 // The question (usually a word) is centered under the clock; the answer reads like
                 // a list, so it's left-aligned and starts a little further in.
                 val answerModifier = Modifier.padding(start = screenWidth * ANSWER_EXTRA_START_FRACTION)
@@ -381,21 +375,6 @@ private fun BoxScope.AnswerHints() {
     }
 }
 
-/**
- * The system's condensed sans-serif: on Wear OS it's Roboto at 75% width (a variable font), so
- * more of a long answer fits on the small round screen.
- */
-private val condensedFontFamily =
-    DeviceFontFamilyName("sans-serif-condensed").let { name ->
-        // every style the card HTML uses (<i>, <b>), so they aren't lost
-        FontFamily(
-            Font(name, FontWeight.Normal, FontStyle.Normal),
-            Font(name, FontWeight.Normal, FontStyle.Italic),
-            Font(name, FontWeight.Bold, FontStyle.Normal),
-            Font(name, FontWeight.Bold, FontStyle.Italic),
-        )
-    }
-
 /** Card text: large when it's short (a word or two), otherwise body text in the condensed font. */
 @Composable
 private fun CardText(
@@ -408,7 +387,7 @@ private fun CardText(
         if (text.length <= 40) {
             MaterialTheme.typography.titleLarge
         } else {
-            MaterialTheme.typography.bodyLarge.copy(fontFamily = condensedFontFamily)
+            MaterialTheme.typography.bodyLarge.copy(fontFamily = CondensedFontFamily)
         }
     Text(
         text = if (text.isBlank()) AnnotatedString(stringResource(R.string.empty_card)) else text,
@@ -419,14 +398,23 @@ private fun CardText(
 }
 
 /**
- * The number of cards left to study today, in bold accent color, where the clock usually is.
- * No clock while studying: it would only take attention from the card.
+ * The number of cards left to study today, bold in the accent color, above the card. It's part of
+ * the card, so it scrolls away with it and never sits on top of the text. No clock while
+ * studying: it would only take attention from the card.
  */
 @Composable
-private fun CardsLeftText(counts: WatchCounts) {
-    val totalStyle = CurvedTextStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-    TimeText {
-        timeTextCurvedText(counts.total.toString(), totalStyle)
+private fun CardsLeft(
+    counts: WatchCounts,
+    modifier: Modifier,
+) {
+    Box(modifier, contentAlignment = Alignment.TopCenter) {
+        Text(
+            counts.total.toString(),
+            modifier = Modifier.padding(top = 10.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

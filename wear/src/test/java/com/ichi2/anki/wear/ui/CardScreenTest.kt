@@ -20,10 +20,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -122,6 +126,25 @@ class CardScreenTest {
         compose.mainClock.advanceTimeBy(1_000)
 
         assertEquals(emptyList<WatchRating>(), answers)
+    }
+
+    @Test
+    fun `cards left is part of the card, so it scrolls away instead of covering the text`() {
+        val longAnswer =
+            "a small cabinet with shelves, used for storing food or dishes" +
+                "<br><i> - She put the cups in the cupboard.</i><br><br>" +
+                "a closet for clothes<br><i> - Hang your coat in the cupboard.</i><br><br>/ˈkʌbərd/"
+        state = state.copy(counts = WatchCounts(12, 0, 0), card = card.copy(answer = longAnswer))
+        compose.onNodeWithText("12").assertIsDisplayed()
+
+        // showing the answer scrolls the card to it
+        tapAt(0.5f)
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText("12").assertIsNotDisplayed()
+
+        compose.onRoot().performTouchInput { swipeDown() }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText("12").assertIsDisplayed()
     }
 
     /** Taps at [fraction] of the width, halfway down. */

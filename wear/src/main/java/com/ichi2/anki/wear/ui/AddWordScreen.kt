@@ -22,12 +22,14 @@ import android.view.HapticFeedbackConstants
 import android.view.inputmethod.EditorInfo
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -129,9 +131,13 @@ fun AddWordScreen(
     }
 }
 
-/** The word, its meanings as they'll appear on the card, the deck, and Add (or Update). */
+/**
+ * The word, its meanings as they'll appear on the card, the deck, and Add (or Update). Styled
+ * like the study screen: the word centered, the meanings left-aligned in the condensed font.
+ */
+@VisibleForTesting
 @Composable
-private fun PreviewScreen(
+internal fun PreviewScreen(
     state: AddWordState.Preview,
     onChooseDeck: () -> Unit,
     onTypeAgain: () -> Unit,
@@ -141,6 +147,7 @@ private fun PreviewScreen(
     val transformationSpec = rememberTransformationSpec()
     val word = state.word
     val meanings = remember(word.preview) { AnnotatedString.fromHtml(word.preview) }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
     ScreenScaffold(
         scrollState = listState,
@@ -162,9 +169,11 @@ private fun PreviewScreen(
             item {
                 Text(
                     meanings,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
+                    // on top of the list's own padding: about the study screen's margins, with
+                    // more room on the left so lines start clear of the round edge
+                    modifier = Modifier.fillMaxWidth().padding(start = screenWidth * 0.10f, end = screenWidth * 0.06f),
+                    textAlign = TextAlign.Start,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = CondensedFontFamily),
                 )
             }
             item {
