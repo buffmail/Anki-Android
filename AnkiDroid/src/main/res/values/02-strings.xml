@@ -24,7 +24,7 @@
     <string name="drawer_close">Close drawer</string>
 
     <string name="note_message">Note saved</string>
-    <string name="note_message_with_new_count">%1$s (new: %2$d)</string>
+    <string name="note_message_with_counts" comment="Toast after adding a note from another app. %1$s is 'Note saved', %2$d the deck's new cards left today, %3$d all cards in the deck">%1$s (new: %2$d, total: %3$d)</string>
 
     <!-- Note editor screen -->
     <string name="CardEditorCardDeck">Card deck:</string>

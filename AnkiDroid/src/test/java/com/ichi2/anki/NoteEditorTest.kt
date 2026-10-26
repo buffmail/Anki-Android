@@ -57,6 +57,7 @@ import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -332,6 +333,22 @@ class NoteEditorTest : RobolectricTest() {
         val actual = editor.currentFieldStrings.toList()
 
         assertThat(actual, contains("hello\nworld", ""))
+    }
+
+    @Test
+    fun `adding from another app shows the deck's new and total cards`() {
+        // already in the deck, so it counts in both numbers
+        addBasicNote("dog", "a pet")
+        ensureCollectionLoadIsSynchronous()
+        val i = Intent(NoteEditorFragment.ACTION_CREATE_FLASHCARD_SEND)
+        i.putExtra(Intent.EXTRA_SUBJECT, "cupboard")
+        i.putExtra(Intent.EXTRA_TEXT, "a small cabinet with shelves")
+
+        // both fields are given, so the note is saved without a tap
+        openNoteEditorWithArgs(i.extras!!, i.action)
+        advanceRobolectricLooper()
+
+        assertThat(ShadowToast.getTextOfLatestToast(), equalTo("Note saved (new: 2, total: 2)"))
     }
 
     @Test

@@ -1259,6 +1259,7 @@ class NoteEditorFragment :
     private fun onNoteAdded(
         count: Int,
         newCardsToday: Int,
+        totalCardsInDeck: Int,
     ) {
         var closeEditorAfterSave = false
         var closeIntent: Intent? = null
@@ -1282,9 +1283,10 @@ class NoteEditorFragment :
             if (caller == NoteEditorCaller.NOTEEDITOR_INTENT_ADD || aedictIntent) {
                 val message =
                     getString(
-                        R.string.note_message_with_new_count,
+                        R.string.note_message_with_counts,
                         getString(R.string.note_message),
                         newCardsToday,
+                        totalCardsInDeck,
                     )
                 showThemedToast(requireContext(), message, shortLength = true)
             }
@@ -1304,9 +1306,13 @@ class NoteEditorFragment :
                     addNote(editorNote!!, deckId)
                 }
             }
-        val todayNewCardsForDeck = withCol { sched.deckDueTree(deckId)?.newCount ?: 0 }
+        // new cards left today, and all cards of the deck (subdecks included, as on the watch)
+        val (newCardsToday, totalCardsInDeck) =
+            withCol {
+                (sched.deckDueTree(deckId)?.newCount ?: 0) to decks.cardCount(deckId, includeSubdecks = true)
+            }
         // update UI based on the result, noOfAddedCards
-        onNoteAdded(changes.count, todayNewCardsForDeck)
+        onNoteAdded(changes.count, newCardsToday, totalCardsInDeck)
     }
 
     @VisibleForTesting
