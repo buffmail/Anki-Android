@@ -21,8 +21,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.wear.compose.material3.MaterialTheme
 import com.ichi2.anki.wear.StudyState
@@ -99,6 +104,31 @@ class CardScreenScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(2_000)
         saveRoundScreenshot(compose.drawWindow(), "card-question.png")
+    }
+
+    @Test
+    fun `held word with its Add button`() {
+        val answer =
+            "a small cabinet with shelves, used for storing food or dishes" +
+                "<br><i> - She put the cups in the cupboard.</i>"
+        val card = WatchCard(1, "cupboard", answer, false, "<1m", "1d", WatchQueue.NEW)
+        val state = StudyState.Showing("English", WatchCounts(12, 0, 0), card, revealed = true, sending = false, sequence = 1)
+        compose.setContent {
+            MaterialTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    CardScreen(state, onReveal = {}, onAnswer = {})
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+        // the middle of the first line of the meaning
+        compose
+            .onNodeWithText("a small cabinet", substring = true)
+            .performTouchInput { longClick(Offset(width * 0.55f, height * 0.08f)) }
+        compose.mainClock.advanceTimeBy(1_000)
+
+        compose.onNodeWithText("Add", substring = true).assertIsDisplayed()
+        saveRoundScreenshot(compose.drawWindow(), "card-held-word.png")
     }
 
     private fun red(pixel: Int) = (pixel shr 16) and 0xFF

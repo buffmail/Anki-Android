@@ -20,12 +20,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
@@ -43,8 +47,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(AndroidJUnit4::class)
+// real text measurement, to find the word under a finger
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w227dp-h227dp-round-watch")
 class CardScreenTest {
     @get:Rule
@@ -66,6 +73,7 @@ class CardScreenTest {
     )
     private var reveals = 0
     private val answers = mutableListOf<WatchRating>()
+    private val addedWords = mutableListOf<String>()
 
     @Before
     fun showCard() {
@@ -78,6 +86,7 @@ class CardScreenTest {
                         state = state.copy(revealed = true)
                     },
                     onAnswer = { answers += it },
+                    onAddWord = { addedWords += it },
                 )
             }
         }
@@ -145,6 +154,50 @@ class CardScreenTest {
         compose.onRoot().performTouchInput { swipeDown() }
         compose.mainClock.advanceTimeBy(2_000)
         compose.onNodeWithText("12").assertIsDisplayed()
+    }
+
+    @Test
+    fun `holding a word highlights it and offers to add it`() {
+        state = state.copy(card = card.copy(answer = "shelves cabinet"))
+        tapAt(0.5f)
+        compose.mainClock.advanceTimeBy(1_000)
+
+        // on "shelves", which lies over the Again side: a hold must not answer
+        compose.onNodeWithText("shelves cabinet").performTouchInput { longClick(Offset(width * 0.1f, height / 2f)) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("Add shelves").assertIsDisplayed().performClick()
+
+        assertEquals(listOf("shelves"), addedWords)
+        assertEquals(emptyList<WatchRating>(), answers)
+    }
+
+    @Test
+    fun `holding where there's no word does nothing`() {
+        tapAt(0.5f)
+        compose.mainClock.advanceTimeBy(1_000)
+
+        compose.onRoot().performTouchInput { longClick(Offset(width * 0.05f, height / 2f)) }
+        compose.mainClock.advanceTimeBy(1_000)
+
+        assertEquals(emptyList<WatchRating>(), answers)
+        compose.onAllNodesWithText("Add", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `a tap lets go of the held word instead of answering`() {
+        state = state.copy(card = card.copy(answer = "shelves cabinet"))
+        tapAt(0.5f)
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("shelves cabinet").performTouchInput { longClick(Offset(width * 0.1f, height / 2f)) }
+        compose.mainClock.advanceTimeBy(500)
+
+        tapAt(0.9f)
+        assertEquals(emptyList<WatchRating>(), answers)
+        compose.onAllNodesWithText("Add", substring = true).assertCountEquals(0)
+
+        tapAt(0.9f)
+        assertEquals(listOf(WatchRating.GOOD), answers)
+        assertEquals(emptyList<String>(), addedWords)
     }
 
     /** Taps at [fraction] of the width, halfway down. */

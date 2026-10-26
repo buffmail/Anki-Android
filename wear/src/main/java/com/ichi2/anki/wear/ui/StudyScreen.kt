@@ -27,7 +27,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -38,6 +37,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,12 +53,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
@@ -65,15 +70,21 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
@@ -126,7 +137,11 @@ private const val FLASH_MILLIS = 350
 private const val AGAIN_SECOND_BUZZ_MILLIS = 130L
 
 @Composable
-fun StudyScreen(viewModel: StudyViewModel) {
+fun StudyScreen(
+    viewModel: StudyViewModel,
+    /** A word held on the card is to be added as a new card. */
+    onAddWord: (String) -> Unit,
+) {
     when (val state = viewModel.state) {
         StudyState.Loading -> LoadingScreen()
         is StudyState.Failed ->
@@ -145,14 +160,15 @@ fun StudyScreen(viewModel: StudyViewModel) {
             )
         is StudyState.Showing -> {
             KeepScreenOn(key = state.sequence to state.revealed)
-            CardScreen(state, onReveal = viewModel::reveal, onAnswer = viewModel::answer)
+            CardScreen(state, onReveal = viewModel::reveal, onAnswer = viewModel::answer, onAddWord = onAddWord)
         }
     }
 }
 
 /**
  * The card. Tap to show the answer; then tap the left side for Again or the right side for Good.
- * Nothing else takes room from the text: thin colored arcs on the edges show which side is which.
+ * Nothing else takes room from the text: tinted sides show which side is which.
+ * Hold a word to add it as a new card: it's highlighted and an Add button appears.
  * Swiping right goes back to the deck list, as everywhere on Wear OS.
  */
 @VisibleForTesting
@@ -161,6 +177,7 @@ internal fun CardScreen(
     state: StudyState.Showing,
     onReveal: () -> Unit,
     onAnswer: (WatchRating) -> Unit,
+    onAddWord: (String) -> Unit = {},
 ) {
     val card = state.card
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -209,11 +226,37 @@ internal fun CardScreen(
         onReveal()
     }
 
-    // One tap handler for the whole card, so nothing inside can swallow the taps: before the
-    // answer is shown a tap anywhere shows it, then the sides answer.
-    val currentState by rememberUpdatedState(state)
-    val revealWith by rememberUpdatedState<(Long) -> Unit> { reveal(it) }
-    val answerWith by rememberUpdatedState<(WatchRating) -> Unit> { answer(it) }
+    // A word held on the card, offered as a new card. Cleared when the card changes.
+    var heldWord by remember { mutableStateOf<HeldWord?>(null) }
+    LaunchedEffect(state.sequence) { heldWord = null }
+    // where the card's text is laid out, to find the word under a finger
+    val placements = remember { TextPlacements() }
+
+    fun hold(position: Offset) {
+        val word = placements.wordAt(position) ?: return
+        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        heldWord = word
+    }
+
+    fun tap(
+        position: Offset,
+        uptimeMillis: Long,
+        width: Float,
+    ) {
+        when {
+            // the first tap only lets go of the held word, so it can't answer by accident
+            heldWord != null -> heldWord = null
+            !state.revealed -> reveal(uptimeMillis)
+            state.sending -> {}
+            uptimeMillis - revealedAt.longValue < ANSWER_LOCK_MILLIS -> {}
+            else -> answerAt(position.x, width)?.let(::answer)
+        }
+    }
+
+    // One touch handler for the whole card, so nothing inside can swallow the taps: before the
+    // answer is shown a tap anywhere shows it, then the sides answer; a hold picks a word.
+    val tapWith by rememberUpdatedState<(Offset, Long, Float) -> Unit> { position, time, width -> tap(position, time, width) }
+    val holdWith by rememberUpdatedState<(Offset) -> Unit> { hold(it) }
 
     ScreenScaffold(
         scrollState = scrollState,
@@ -223,23 +266,46 @@ internal fun CardScreen(
         Box(
             Modifier
                 .fillMaxSize()
+                .onGloballyPositioned { placements.card = it }
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
-                        // null when the card scrolled instead, or a button on top (Show) took the tap
-                        val up = waitForUpOrCancellation() ?: return@awaitEachGesture
-                        // a swipe (going back, or old habit) isn't a tap
-                        if ((up.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                        val holdMillis = viewConfiguration.longPressTimeoutMillis
+                        // Follow the finger until it lifts, at most for the hold time.
+                        var up: PointerInputChange? = null
+                        var ended = false
+                        val held =
+                            withTimeoutOrNull(holdMillis) {
+                                while (!ended) {
+                                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                    when {
+                                        // the card scrolled, or a button on top (Show, Add) took the touch
+                                        change == null || change.isConsumed -> ended = true
+                                        // a swipe (going back, or old habit) is neither a tap nor a hold
+                                        (change.position - down.position).getDistance() > viewConfiguration.touchSlop -> ended = true
+                                        !change.pressed -> {
+                                            up = change
+                                            ended = true
+                                        }
+                                    }
+                                }
+                            } == null
+                        val lifted = up
+                        // also checked on lifting, in case the timer runs late
+                        if (held || (lifted != null && lifted.uptimeMillis - down.uptimeMillis >= holdMillis)) {
+                            holdWith(down.position)
+                            if (held) {
+                                // the rest of this touch belongs to the hold: no scrolling, no answer
+                                do {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    event.changes.forEach { it.consume() }
+                                } while (event.changes.any { it.pressed })
+                            }
                             return@awaitEachGesture
                         }
-                        up.consume()
-                        val card = currentState
-                        when {
-                            !card.revealed -> revealWith(up.uptimeMillis)
-                            card.sending -> {}
-                            up.uptimeMillis - revealedAt.longValue < ANSWER_LOCK_MILLIS -> {}
-                            else -> answerAt(up.position.x, size.width.toFloat())?.let(answerWith)
-                        }
+                        if (lifted == null) return@awaitEachGesture
+                        lifted.consume()
+                        tapWith(lifted.position, lifted.uptimeMillis, size.width.toFloat())
                     }
                 },
         ) {
@@ -261,10 +327,11 @@ internal fun CardScreen(
                 // The question (usually a word) is centered under the clock; the answer reads like
                 // a list, so it's left-aligned and starts a little further in.
                 val answerModifier = Modifier.padding(start = screenWidth * ANSWER_EXTRA_START_FRACTION)
+                val held = heldWord
                 if (state.revealed && card.answerIncludesQuestion) {
-                    CardText(card.answer, TextAlign.Start, answerModifier)
+                    CardText(card.answer, TextAlign.Start, placements.of(CardPart.ANSWER), held?.rangeIn(CardPart.ANSWER), answerModifier)
                 } else {
-                    CardText(card.question, TextAlign.Center)
+                    CardText(card.question, TextAlign.Center, placements.of(CardPart.QUESTION), held?.rangeIn(CardPart.QUESTION))
                 }
                 if (state.revealed && !card.answerIncludesQuestion) {
                     Box(
@@ -275,7 +342,7 @@ internal fun CardScreen(
                             .background(MaterialTheme.colorScheme.outlineVariant)
                             .onGloballyPositioned { answerTop = it.positionInParent().y.roundToInt() },
                     )
-                    CardText(card.answer, TextAlign.Start, answerModifier)
+                    CardText(card.answer, TextAlign.Start, placements.of(CardPart.ANSWER), held?.rangeIn(CardPart.ANSWER), answerModifier)
                 }
                 // keeps the last line out of the round screen's narrow bottom
                 Spacer(Modifier.height(screenWidth * if (state.revealed) 0.15f else 0.26f))
@@ -283,7 +350,9 @@ internal fun CardScreen(
 
             if (state.revealed) {
                 AnswerHints()
-            } else {
+            }
+            val held = heldWord
+            if (!state.revealed || held != null) {
                 // fades out text that scrolls behind the button
                 Box(
                     Modifier
@@ -292,6 +361,19 @@ internal fun CardScreen(
                         .height(screenWidth * 0.26f)
                         .background(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color.Black)),
                 )
+            }
+            if (held != null) {
+                EdgeButton(
+                    onClick = {
+                        heldWord = null
+                        onAddWord(held.word)
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    buttonSize = EdgeButtonSize.Small,
+                ) {
+                    AddWordLabel(held.word)
+                }
+            } else if (!state.revealed) {
                 EdgeButton(
                     onClick = { reveal(SystemClock.uptimeMillis()) },
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -375,25 +457,129 @@ private fun BoxScope.AnswerHints() {
     }
 }
 
-/** Card text: large when it's short (a word or two), otherwise body text in the condensed font. */
+/** "Add **word**", shrunk to fit the button rather than cut off when the word is long. */
+@Composable
+private fun AddWordLabel(word: String) {
+    val style = MaterialTheme.typography.labelLarge
+    val label = stringResource(R.string.add_held_word, word)
+    val text =
+        remember(label, word) {
+            buildAnnotatedString {
+                append(label)
+                val start = label.indexOf(word)
+                if (start >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, start + word.length)
+            }
+        }
+    BasicText(
+        text = text,
+        style = style.copy(color = LocalContentColor.current),
+        maxLines = 1,
+        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = style.fontSize),
+    )
+}
+
+/** The question or the answer: the two pieces of card text a word can be held in. */
+private enum class CardPart { QUESTION, ANSWER }
+
+/** A word held on the card: where it is, to highlight it, and the word itself. */
+private data class HeldWord(
+    val part: CardPart,
+    val range: TextRange,
+    val word: String,
+) {
+    fun rangeIn(part: CardPart): TextRange? = range.takeIf { this.part == part }
+}
+
+/** Where a piece of card text was laid out on screen. */
+private class PlacedText {
+    var layout: TextLayoutResult? = null
+    var coordinates: LayoutCoordinates? = null
+}
+
+/** Where the card's text is laid out, to find the word under a finger. */
+private class TextPlacements {
+    /** The whole card: touch positions are relative to it. */
+    var card: LayoutCoordinates? = null
+    private val texts = mutableMapOf<CardPart, PlacedText>()
+
+    fun of(part: CardPart): PlacedText = texts.getOrPut(part) { PlacedText() }
+
+    /** The word at [position] on the card, if a word of the shown text is there. */
+    fun wordAt(position: Offset): HeldWord? {
+        val card = card ?: return null
+        return texts.firstNotNullOfOrNull { (part, placed) ->
+            placed.wordAt(card, position)?.let { (range, word) -> HeldWord(part, range, word) }
+        }
+    }
+
+    private fun PlacedText.wordAt(
+        card: LayoutCoordinates,
+        position: Offset,
+    ): Pair<TextRange, String>? {
+        val layout = layout ?: return null
+        val coordinates = coordinates?.takeIf { it.isAttached && card.isAttached } ?: return null
+        val local = coordinates.localPositionOf(card, position)
+        if (local.y < 0 || local.y > layout.size.height) return null
+        // beside a line (left-aligned text ends early) isn't on a word
+        val line = layout.getLineForVerticalPosition(local.y)
+        if (local.x < layout.getLineLeft(line) || local.x > layout.getLineRight(line)) return null
+        val text = layout.layoutInput.text.text
+        val boundary = layout.getWordBoundary(layout.getOffsetForPosition(local))
+        var start = boundary.min
+        var end = boundary.max
+        while (start < end && !text[start].isLetterOrDigit()) start++
+        while (end > start && !text[end - 1].isLetterOrDigit()) end--
+        val word = text.substring(start, end)
+        // nothing to look up: punctuation, a number, or the pronunciation (IPA, like /ˈkʌbərd/)
+        if (word.none { it.isLetter() } || word.any { it.code in IPA_CODE_POINTS }) return null
+        return TextRange(start, end) to word
+    }
+
+    private companion object {
+        /** IPA Extensions and Spacing Modifier Letters (ə, ʌ, ˈ, ː, ...). */
+        val IPA_CODE_POINTS = 0x250..0x2FF
+    }
+}
+
+/**
+ * Card text: large when it's short (a word or two), otherwise body text in the condensed font.
+ * [highlight] marks a held word; where the text lands on screen is recorded in [placed].
+ */
 @Composable
 private fun CardText(
     html: String,
     align: TextAlign,
+    placed: PlacedText,
+    highlight: TextRange?,
     modifier: Modifier = Modifier,
 ) {
-    val text = remember(html) { AnnotatedString.fromHtml(html) }
+    val base = remember(html) { AnnotatedString.fromHtml(html) }
+    val highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+    val text =
+        when {
+            base.isBlank() -> AnnotatedString(stringResource(R.string.empty_card))
+            highlight == null -> base
+            else ->
+                remember(base, highlight, highlightColor) {
+                    buildAnnotatedString {
+                        append(base)
+                        addStyle(SpanStyle(background = highlightColor), highlight.start, highlight.end)
+                    }
+                }
+        }
     val style =
-        if (text.length <= 40) {
+        if (base.length <= 40) {
             MaterialTheme.typography.titleLarge
         } else {
             MaterialTheme.typography.bodyLarge.copy(fontFamily = CondensedFontFamily)
         }
     Text(
-        text = if (text.isBlank()) AnnotatedString(stringResource(R.string.empty_card)) else text,
-        modifier = modifier.fillMaxWidth(),
+        text = text,
+        modifier = modifier.fillMaxWidth().onGloballyPositioned { placed.coordinates = it },
         textAlign = align,
         style = style,
+        // "(empty)" isn't a word to add
+        onTextLayout = { placed.layout = if (base.isBlank()) null else it },
     )
 }
 

@@ -8,6 +8,9 @@ A minimal watch app (built for Galaxy Watch 7) to study existing decks and add E
   tinted red / green as a reminder; the tapped side lights up, and Good buzzes once, Again twice. Taps are
   ignored for 0.4 s after the answer appears, so a double tap on *Show* doesn't answer the card.
   Swipe right or press the back button to return to the deck list
+- While studying, hold a word for half a second to add it as a new card: it's highlighted and an
+  *Add* button appears at the bottom, which opens *Add word* for it. Tap anywhere else to let go
+  of the word (that tap doesn't answer the card); a hold never answers it
 - While studying, the word is centered and the meanings are left-aligned, in the watch's
   condensed font so more fits on screen. The top of the screen shows how many cards are left
   today, with no clock

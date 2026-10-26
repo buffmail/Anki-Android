@@ -39,5 +39,6 @@
     <string name="word_added_message">“%1$s” in %2$s</string>
     <string name="add_another">Add another</string>
     <string name="add_failed_title">Couldn\'t add the word</string>
+    <string name="add_held_word">Add %s</string>
     <string name="no_api_key">Set your Gemini API key on the phone: AnkiDroid › Settings › Advanced › Gemini API key.</string>
 </resources>

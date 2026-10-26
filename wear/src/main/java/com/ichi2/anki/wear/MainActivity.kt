@@ -17,6 +17,7 @@
 package com.ichi2.anki.wear
 
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -46,7 +47,10 @@ class MainActivity : ComponentActivity() {
 private const val DECKS_ROUTE = "decks"
 private const val DECK_ID_ARG = "deckId"
 private const val STUDY_ROUTE = "study/{$DECK_ID_ARG}"
-private const val ADD_WORD_ROUTE = "add"
+private const val WORD_ARG = "word"
+
+/** `add`, or `add?word=...` to look a word up straight away (a word held on a card). */
+private const val ADD_WORD_ROUTE = "add?$WORD_ARG={$WORD_ARG}"
 private const val ADD_WORD_DECK_ROUTE = "add/deck"
 
 @Composable
@@ -65,15 +69,25 @@ private fun WearApp() {
                     DeckListScreen(
                         viewModel = viewModel { DeckListViewModel(phone) },
                         onDeckClick = { deck -> navController.navigate("study/${deck.id}") },
-                        onAddWord = { navController.navigate(ADD_WORD_ROUTE) },
+                        onAddWord = { navController.navigate("add") },
                     )
                 }
-                composable(ADD_WORD_ROUTE) { entry ->
+                composable(
+                    ADD_WORD_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(WORD_ARG) {
+                                type = NavType.StringType
+                                nullable = true
+                            },
+                        ),
+                ) { entry ->
                     // shared with the deck list, which syncs when shown again after a word was added
                     val decksEntry = remember(entry) { navController.getBackStackEntry(DECKS_ROUTE) }
                     val deckListViewModel = viewModel(decksEntry) { DeckListViewModel(phone) }
+                    val word = entry.arguments?.getString(WORD_ARG)
                     AddWordScreen(
-                        viewModel = viewModel { addWordViewModel(context, phone) },
+                        viewModel = viewModel { addWordViewModel(context, phone, word) },
                         onChooseDeck = { navController.navigate(ADD_WORD_DECK_ROUTE) },
                         onWordAdded = deckListViewModel::onWordAdded,
                         onBack = { navController.popBackStack() },
@@ -92,7 +106,10 @@ private fun WearApp() {
                     arguments = listOf(navArgument(DECK_ID_ARG) { type = NavType.LongType }),
                 ) { entry ->
                     val deckId = entry.arguments?.getLong(DECK_ID_ARG) ?: return@composable
-                    StudyScreen(viewModel = viewModel { StudyViewModel(phone, deckId) })
+                    StudyScreen(
+                        viewModel = viewModel { StudyViewModel(phone, deckId) },
+                        onAddWord = { word -> navController.navigate("add?$WORD_ARG=${Uri.encode(word)}") },
+                    )
                 }
             }
         }
@@ -102,7 +119,9 @@ private fun WearApp() {
 private fun addWordViewModel(
     context: Context,
     phone: PhoneClient,
+    word: String? = null,
 ) = AddWordViewModel(
     phone,
     context.applicationContext.getSharedPreferences(AddWordViewModel.PREFS_NAME, Context.MODE_PRIVATE),
+    initialWord = word,
 )

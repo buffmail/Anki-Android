@@ -73,11 +73,13 @@ sealed interface DeckChoices {
  * Adds a word to a deck: the phone looks it up with anki-new-card (the watch never sees the
  * Gemini API key), the watch shows what will go on the card, and the phone adds it.
  *
- * The deck added to last is remembered in [prefs] and suggested next time.
+ * The deck added to last is remembered in [prefs] and suggested next time. With [initialWord]
+ * (a word held on a card), it's looked up straight away instead of asking for a word.
  */
 class AddWordViewModel(
     private val phone: PhoneClient,
     private val prefs: SharedPreferences,
+    initialWord: String? = null,
 ) : ViewModel() {
     var state: AddWordState by mutableStateOf(AddWordState.Typing)
         private set
@@ -90,6 +92,10 @@ class AddWordViewModel(
         private set
 
     private var retryAction: (() -> Unit)? = null
+
+    init {
+        if (!initialWord.isNullOrBlank()) lookUp(initialWord.trim())
+    }
 
     fun onInputOpened() {
         isInputOpen = true
