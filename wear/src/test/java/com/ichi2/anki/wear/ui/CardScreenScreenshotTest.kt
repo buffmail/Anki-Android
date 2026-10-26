@@ -18,6 +18,7 @@ package com.ichi2.anki.wear.ui
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Path
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -57,7 +58,10 @@ class CardScreenScreenshotTest {
             WatchCard(
                 id = 1,
                 question = "cupboard",
-                answer = "a small cabinet with shelves<br><i> - She put the cups in the cupboard.</i>",
+                answer =
+                    "a small cabinet with shelves, used for storing food or dishes" +
+                        "<br><i> - She put the cups in the cupboard.</i><br><br>" +
+                        "a closet for clothes<br><i> - Hang your coat in the cupboard.</i><br><br>/ˈkʌbərd/",
                 answerIncludesQuestion = false,
                 againInterval = "<1m",
                 goodInterval = "1d",
@@ -97,13 +101,20 @@ class CardScreenScreenshotTest {
         return bitmap
     }
 
+    /** Saves [bitmap] cut to the round screen, on gray, the way it looks on the watch. */
     private fun save(
         bitmap: Bitmap,
         name: String,
     ) {
+        val round = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        Canvas(round).apply {
+            drawColor(android.graphics.Color.rgb(40, 40, 40))
+            clipPath(Path().apply { addCircle(width / 2f, height / 2f, width / 2f, Path.Direction.CW) })
+            drawBitmap(bitmap, 0f, 0f, null)
+        }
         val file = File("build/screenshots/$name")
         file.parentFile?.mkdirs()
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        file.outputStream().use { round.compress(Bitmap.CompressFormat.PNG, 100, it) }
         println("Screenshot: ${file.absolutePath}")
     }
 

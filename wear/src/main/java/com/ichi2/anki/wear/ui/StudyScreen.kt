@@ -80,7 +80,6 @@ import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TimeText
 import androidx.wear.compose.material3.timeTextCurvedText
-import androidx.wear.compose.material3.timeTextSeparator
 import com.ichi2.anki.wear.R
 import com.ichi2.anki.wear.StudyState
 import com.ichi2.anki.wear.StudyViewModel
@@ -97,6 +96,12 @@ private val goodColor = Color(0xFF2E7D32)
 
 /** Space left and right of the card text, as a fraction of the screen width. */
 private const val TEXT_SIDE_FRACTION = 0.12f
+
+/**
+ * Extra space before the answer, which is left-aligned: keeps its lines clear of the red hint,
+ * and less cut off by the round screen near the top and bottom.
+ */
+private const val ANSWER_EXTRA_START_FRACTION = 0.04f
 
 /**
  * The answer hints stop this far (as a fraction of the screen width) from the screen's rim,
@@ -215,7 +220,7 @@ internal fun CardScreen(
 
     ScreenScaffold(
         scrollState = scrollState,
-        timeText = { CountsTimeText(state.counts) },
+        timeText = { CardsLeftText(state.counts) },
     ) { _ ->
         Box(
             Modifier
@@ -255,10 +260,13 @@ internal fun CardScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Spacer(Modifier.height(screenWidth * 0.2f))
+                // The question (usually a word) is centered under the clock; the answer reads like
+                // a list, so it's left-aligned and starts a little further in.
+                val answerModifier = Modifier.padding(start = screenWidth * ANSWER_EXTRA_START_FRACTION)
                 if (state.revealed && card.answerIncludesQuestion) {
-                    CardText(card.answer)
+                    CardText(card.answer, TextAlign.Start, answerModifier)
                 } else {
-                    CardText(card.question)
+                    CardText(card.question, TextAlign.Center)
                 }
                 if (state.revealed && !card.answerIncludesQuestion) {
                     Box(
@@ -269,7 +277,7 @@ internal fun CardScreen(
                             .background(MaterialTheme.colorScheme.outlineVariant)
                             .onGloballyPositioned { answerTop = it.positionInParent().y.roundToInt() },
                     )
-                    CardText(card.answer)
+                    CardText(card.answer, TextAlign.Start, answerModifier)
                 }
                 // keeps the last line out of the round screen's narrow bottom
                 Spacer(Modifier.height(screenWidth * if (state.revealed) 0.15f else 0.26f))
@@ -371,24 +379,29 @@ private fun BoxScope.AnswerHints() {
 
 /** Card text, larger when it's short (a word or two). */
 @Composable
-private fun CardText(html: String) {
+private fun CardText(
+    html: String,
+    align: TextAlign,
+    modifier: Modifier = Modifier,
+) {
     val text = remember(html) { AnnotatedString.fromHtml(html) }
     val style = if (text.length <= 40) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge
     Text(
         text = if (text.isBlank()) AnnotatedString(stringResource(R.string.empty_card)) else text,
-        modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Center,
+        modifier = modifier.fillMaxWidth(),
+        textAlign = align,
         style = style,
     )
 }
 
-/** The clock, followed by the number of cards left to study today, in bold accent color. */
+/**
+ * The number of cards left to study today, in bold accent color, where the clock usually is.
+ * No clock while studying: it would only take attention from the card.
+ */
 @Composable
-private fun CountsTimeText(counts: WatchCounts) {
+private fun CardsLeftText(counts: WatchCounts) {
     val totalStyle = CurvedTextStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-    TimeText { time ->
-        timeTextCurvedText(time)
-        timeTextSeparator()
+    TimeText {
         timeTextCurvedText(counts.total.toString(), totalStyle)
     }
 }
