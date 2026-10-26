@@ -65,6 +65,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextAlign
@@ -377,7 +381,22 @@ private fun BoxScope.AnswerHints() {
     }
 }
 
-/** Card text, larger when it's short (a word or two). */
+/**
+ * The system's condensed sans-serif: on Wear OS it's Roboto at 75% width (a variable font), so
+ * more of a long answer fits on the small round screen.
+ */
+private val condensedFontFamily =
+    DeviceFontFamilyName("sans-serif-condensed").let { name ->
+        // every style the card HTML uses (<i>, <b>), so they aren't lost
+        FontFamily(
+            Font(name, FontWeight.Normal, FontStyle.Normal),
+            Font(name, FontWeight.Normal, FontStyle.Italic),
+            Font(name, FontWeight.Bold, FontStyle.Normal),
+            Font(name, FontWeight.Bold, FontStyle.Italic),
+        )
+    }
+
+/** Card text: large when it's short (a word or two), otherwise body text in the condensed font. */
 @Composable
 private fun CardText(
     html: String,
@@ -385,7 +404,12 @@ private fun CardText(
     modifier: Modifier = Modifier,
 ) {
     val text = remember(html) { AnnotatedString.fromHtml(html) }
-    val style = if (text.length <= 40) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge
+    val style =
+        if (text.length <= 40) {
+            MaterialTheme.typography.titleLarge
+        } else {
+            MaterialTheme.typography.bodyLarge.copy(fontFamily = condensedFontFamily)
+        }
     Text(
         text = if (text.isBlank()) AnnotatedString(stringResource(R.string.empty_card)) else text,
         modifier = modifier.fillMaxWidth(),
