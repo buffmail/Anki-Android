@@ -33,7 +33,7 @@ import kotlinx.serialization.json.Json
  * running different versions report a clear error instead of misbehaving.
  */
 object WearProtocol {
-    const val VERSION = 3
+    const val VERSION = 4
     const val PATH_PREFIX = "/ankidroid"
     const val RPC_PATH = "$PATH_PREFIX/v$VERSION"
 
@@ -103,6 +103,13 @@ sealed interface WearRequest {
         val word: String,
         /** Deck the watch added to last time. Ignored if it no longer exists. */
         val preferredDeckId: Long? = null,
+    ) : WearRequest
+
+    /** Explain the origin of the word on this card. Replied with [WearResponse.Etymology]. */
+    @Serializable
+    @SerialName("etymology")
+    data class GetEtymology(
+        val cardId: Long,
     ) : WearRequest
 
     /**
@@ -179,6 +186,15 @@ sealed interface WearResponse {
         val deckName: String,
         /** Number of existing notes updated; 0 when a new note was added. */
         val updatedNotes: Int,
+    ) : WearResponse
+
+    @Serializable
+    @SerialName("etymology")
+    data class Etymology(
+        val cardId: Long,
+        val word: String,
+        /** Brief plain text, never HTML. */
+        val explanation: String,
     ) : WearResponse
 
     /** The phone has no Gemini API key: it's set in AnkiDroid's settings on the phone. */

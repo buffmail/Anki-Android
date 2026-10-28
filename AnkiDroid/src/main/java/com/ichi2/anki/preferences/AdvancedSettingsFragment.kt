@@ -140,7 +140,7 @@ class AdvancedSettingsFragment : SettingsFragment() {
     }
 
     /**
-     * The Gemini API key for adding words from the watch. It is saved encrypted by [GeminiApiKey],
+     * The Gemini API key for watch word lookups and etymology. It is saved encrypted by [GeminiApiKey],
      * not by the preference, and never shown again once saved.
      */
     private fun setupGeminiApiKeyPreference() {

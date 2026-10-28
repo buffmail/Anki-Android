@@ -17,6 +17,8 @@
     <string name="empty_card">(empty)</string>
     <string name="finished">Congratulations! You have finished this deck for now.</string>
     <string name="check_again">Check again</string>
+    <string name="etymology">Etymology</string>
+    <string name="loading_etymology">Looking up word origin…</string>
 
     <string name="error_title">Can\'t reach AnkiDroid</string>
     <string name="retry">Retry</string>
@@ -40,5 +42,5 @@
     <string name="add_another">Add another</string>
     <string name="add_failed_title">Couldn\'t add the word</string>
     <string name="add_held_word">Add %s</string>
-    <string name="no_api_key">Set your Gemini API key on the phone: AnkiDroid › Settings › Advanced › Gemini API key.</string>
+    <string name="no_api_key">Set your Gemini API key on the phone: AnkiDroid › Settings › Advanced › Watch › Gemini API key.</string>
 </resources>

@@ -30,6 +30,7 @@ class WearProtocolTest {
                 WearRequest.Sync,
                 WearRequest.LookUpWord("Cupboard"),
                 WearRequest.LookUpWord("cupboard", preferredDeckId = 42),
+                WearRequest.GetEtymology(cardId = 7),
                 WearRequest.AddWord(deckId = 42, word = "cupboard", back = "a cabinet<br><i> - in the cupboard</i>"),
             )
         for (request in requests) {
@@ -67,6 +68,7 @@ class WearProtocolTest {
                     deckName = "English",
                 ),
                 WearResponse.WordAdded(word = "cupboard", deckName = "English", updatedNotes = 0),
+                WearResponse.Etymology(cardId = 7, word = "wardrobe", explanation = "From Old French garderobe."),
                 WearResponse.NoApiKey,
             )
         for (response in responses) {

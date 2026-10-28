@@ -103,7 +103,7 @@ class PhoneClient(
         /** The phone waits up to 45s for AnkiWeb before replying. */
         const val SYNC_TIMEOUT_MILLIS = 60_000L
 
-        /** Looking a word up goes from the phone to anki-new-card and Gemini (25s at most). */
+        /** Word and etymology lookups call Gemini from the phone (25s at most). */
         const val LOOKUP_TIMEOUT_MILLIS = 30_000L
     }
 }

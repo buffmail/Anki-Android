@@ -40,6 +40,7 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class WearRequestHandlerTest : RobolectricTest() {
     private val realWordLookup = WearRequestHandler.wordLookup
+    private val realEtymologyLookup = WearRequestHandler.etymologyLookup
 
     private val cupboard =
         WordDefinition(
@@ -53,7 +54,67 @@ class WearRequestHandlerTest : RobolectricTest() {
     @After
     fun restoreWordLookup() {
         WearRequestHandler.wordLookup = realWordLookup
+        WearRequestHandler.etymologyLookup = realEtymologyLookup
     }
+
+    @Test
+    fun `etymology uses the displayed question without changing the note or schedule`() =
+        runTest {
+            val deckId = addDeckWithBasicNotes("English", "<b>Wardrobe</b>" to "a cabinet for clothes")
+            val card = nextCard(deckId).card!!
+            val before = col.getCard(card.id).toBackendCard()
+            val noteBefore =
+                col
+                    .getCard(card.id)
+                    .note(col)
+                    .fields
+                    .toList()
+            val words = mutableListOf<String>()
+            WearRequestHandler.etymologyLookup =
+                EtymologyLookup { word ->
+                    words += word
+                    "From Old French garderobe: garder (guard) + robe (clothes), unrelated to war."
+                }
+
+            val response = WearRequestHandler.handle(WearRequest.GetEtymology(card.id))
+
+            val etymology = assertIs<WearResponse.Etymology>(response)
+            assertEquals(listOf("wardrobe"), words)
+            assertEquals(card.id, etymology.cardId)
+            assertEquals("wardrobe", etymology.word)
+            assertTrue(etymology.explanation.contains("unrelated to war"))
+            assertEquals(before, col.getCard(card.id).toBackendCard())
+            assertEquals(
+                noteBefore,
+                col
+                    .getCard(card.id)
+                    .note(col)
+                    .fields
+                    .toList(),
+            )
+            assertEquals(card.id, nextCard(deckId).card!!.id)
+        }
+
+    @Test
+    fun `etymology without a key asks for the phone setting`() =
+        runTest {
+            val deckId = addDeckWithBasicNotes("English", "wardrobe" to "a cabinet for clothes")
+            WearRequestHandler.etymologyLookup = EtymologyLookup { throw MissingApiKeyException() }
+
+            assertEquals(WearResponse.NoApiKey, WearRequestHandler.handle(WearRequest.GetEtymology(nextCard(deckId).card!!.id)))
+        }
+
+    @Test
+    fun `etymology errors are returned over the bridge`() =
+        runTest {
+            val deckId = addDeckWithBasicNotes("English", "wardrobe" to "a cabinet for clothes")
+            WearRequestHandler.etymologyLookup = EtymologyLookup { throw WordLookupException("Couldn't reach Gemini.") }
+            val request = WearRequest.GetEtymology(nextCard(deckId).card!!.id)
+
+            val reply = WearRequestHandler.handle(WearProtocol.RPC_PATH, WearProtocol.encode(request))
+
+            assertEquals(WearResponse.Error("Couldn't reach Gemini."), WearProtocol.decodeResponse(reply))
+        }
 
     @Test
     fun `deck list contains decks with their counts`() =

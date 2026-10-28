@@ -20,6 +20,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -27,9 +30,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.wear.compose.material3.MaterialTheme
+import com.ichi2.anki.wear.EtymologyState
 import com.ichi2.anki.wear.StudyState
 import com.ichi2.anki.wear.protocol.WatchCard
 import com.ichi2.anki.wear.protocol.WatchCounts
@@ -52,6 +57,30 @@ import org.robolectric.annotation.GraphicsMode
 class CardScreenScreenshotTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun `etymology button and explanation fit the round screen`() {
+        val card = WatchCard(1, "wardrobe", "a cabinet for clothes", false, "<1m", "1d", WatchQueue.NEW)
+        var state by mutableStateOf(StudyState.Showing("English", WatchCounts(12, 0, 0), card, true, false, 1))
+        compose.setContent {
+            MaterialTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    CardScreen(state, onReveal = {}, onAnswer = {})
+                }
+            }
+        }
+        compose.onNodeWithText("Etymology").performScrollTo().assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(2_000)
+        saveRoundScreenshot(compose.drawWindow(), "card-etymology-button.png")
+
+        val explanation =
+            "From Old French garderobe: garder (to guard) + robe (clothes). " +
+                "It originally meant a place to keep clothes safe, then a clothes cupboard. It is unrelated to war."
+        state = state.copy(etymology = EtymologyState.Loaded(explanation))
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText("Etymology").assertIsDisplayed()
+        saveRoundScreenshot(compose.drawWindow(), "card-etymology-explanation.png")
+    }
 
     @Test
     fun `answer hints tint the sides outside the text`() {

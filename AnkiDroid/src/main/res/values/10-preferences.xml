@@ -472,8 +472,8 @@ this formatter is used if the bind only applies to the answer">A: %s</string>
     <string name="screen" maxLength="41">Screen</string>
     <string name="pref_cat_watch" maxLength="41">Watch</string>
     <string name="gemini_api_key_title" maxLength="41">Gemini API key</string>
-    <string name="gemini_api_key_summary_set">Set. Words added on the watch are looked up with it</string>
-    <string name="gemini_api_key_summary_not_set">Not set. Needed to add words from the watch</string>
+    <string name="gemini_api_key_summary_set">Set. Used for watch word lookups and etymology</string>
+    <string name="gemini_api_key_summary_not_set">Not set. Needed for watch word lookups and etymology</string>
     <string name="gemini_api_key_dialog_message">Paste your key from Google AI Studio. It is stored encrypted on this phone. Leave empty to remove it.</string>
 
     <!--Keyboard shortcuts dialog-->

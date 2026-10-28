@@ -31,10 +31,10 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The user's Gemini API key, used to look up words added from the watch.
+ * The user's Gemini API key, used for word lookups and etymology from the watch.
  *
  * It is typed into AnkiDroid's settings, never into the source code or the APK, and it never
- * leaves the phone except in the request to anki-new-card.
+ * leaves the phone only for HTTPS requests to anki-new-card (definitions) or Gemini (etymology).
  *
  * It is stored encrypted with an AES key kept in the Android Keystore. AnkiDroid allows backups,
  * so the stored value may be copied to a Google Drive backup; without the Keystore key, which

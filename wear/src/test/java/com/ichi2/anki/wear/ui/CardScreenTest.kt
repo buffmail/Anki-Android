@@ -30,13 +30,16 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.wear.compose.material3.MaterialTheme
+import com.ichi2.anki.wear.EtymologyState
 import com.ichi2.anki.wear.StudyState
+import com.ichi2.anki.wear.UiMessage
 import com.ichi2.anki.wear.protocol.WatchCard
 import com.ichi2.anki.wear.protocol.WatchCounts
 import com.ichi2.anki.wear.protocol.WatchQueue
@@ -74,6 +77,7 @@ class CardScreenTest {
     private var reveals = 0
     private val answers = mutableListOf<WatchRating>()
     private val addedWords = mutableListOf<String>()
+    private var etymologyRequests = 0
 
     @Before
     fun showCard() {
@@ -87,9 +91,44 @@ class CardScreenTest {
                     },
                     onAnswer = { answers += it },
                     onAddWord = { addedWords += it },
+                    onEtymology = { etymologyRequests++ },
                 )
             }
         }
+    }
+
+    @Test
+    fun `etymology is below the revealed answer and its touch never rates the card`() {
+        compose.onAllNodesWithText("Etymology").assertCountEquals(0)
+        state = state.copy(card = card.copy(question = "wardrobe", answer = "a cabinet for clothes<br>".repeat(20)))
+        tapAt(0.5f)
+        compose.mainClock.advanceTimeBy(1_000)
+        compose
+            .onNodeWithText("Etymology")
+            .assertIsNotDisplayed()
+            .performScrollTo()
+            .assertIsDisplayed()
+        // Tap over the left rating band, inside the button, using real pointer input.
+        compose.onNodeWithText("Etymology").performTouchInput { click(Offset(width * 0.1f, height / 2f)) }
+
+        assertEquals(1, etymologyRequests)
+        assertEquals(emptyList<WatchRating>(), answers)
+    }
+
+    @Test
+    fun `etymology loading success and retry stay on the revealed card`() {
+        state = state.copy(revealed = true, etymology = EtymologyState.Loading)
+        compose.onNodeWithText("Looking up word origin…").performScrollTo().assertIsDisplayed()
+
+        val explanation = "From Old French garderobe: guard + clothes. It is unrelated to war."
+        state = state.copy(etymology = EtymologyState.Loaded(explanation))
+        compose.onNodeWithText(explanation).performScrollTo().assertIsDisplayed()
+
+        state = state.copy(etymology = EtymologyState.Failed(UiMessage.Text("Phone offline")))
+        compose.onNodeWithText("Phone offline").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Retry").performScrollTo().performClick()
+        assertEquals(1, etymologyRequests)
+        assertEquals(emptyList<WatchRating>(), answers)
     }
 
     @Test

@@ -82,12 +82,15 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
+import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
+import com.ichi2.anki.wear.EtymologyState
 import com.ichi2.anki.wear.R
 import com.ichi2.anki.wear.StudyState
 import com.ichi2.anki.wear.StudyViewModel
@@ -159,8 +162,14 @@ fun StudyScreen(
                 onButtonClick = viewModel::reload,
             )
         is StudyState.Showing -> {
-            KeepScreenOn(key = state.sequence to state.revealed)
-            CardScreen(state, onReveal = viewModel::reveal, onAnswer = viewModel::answer, onAddWord = onAddWord)
+            KeepScreenOn(key = Triple(state.sequence, state.revealed, state.etymology))
+            CardScreen(
+                state,
+                onReveal = viewModel::reveal,
+                onAnswer = viewModel::answer,
+                onAddWord = onAddWord,
+                onEtymology = viewModel::loadEtymology,
+            )
         }
     }
 }
@@ -178,6 +187,7 @@ internal fun CardScreen(
     onReveal: () -> Unit,
     onAnswer: (WatchRating) -> Unit,
     onAddWord: (String) -> Unit = {},
+    onEtymology: () -> Unit = {},
 ) {
     val card = state.card
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -196,6 +206,15 @@ internal fun CardScreen(
         val top = answerTop ?: return@LaunchedEffect
         val margin = with(density) { (screenWidth * 0.15f).roundToPx() }
         scrollState.animateScrollTo((top - margin).coerceAtLeast(0))
+    }
+
+    var etymologyTop by remember(state.sequence) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(state.sequence, state.etymology, etymologyTop) {
+        val top = etymologyTop ?: return@LaunchedEffect
+        if (state.etymology != EtymologyState.Idle) {
+            val margin = with(density) { (screenWidth * 0.15f).roundToPx() }
+            scrollState.animateScrollTo((top - margin).coerceAtLeast(0))
+        }
     }
 
     // When the answer was shown, in the time base of touch events (SystemClock.uptimeMillis)
@@ -253,8 +272,8 @@ internal fun CardScreen(
         }
     }
 
-    // One touch handler for the whole card, so nothing inside can swallow the taps: before the
-    // answer is shown a tap anywhere shows it, then the sides answer; a hold picks a word.
+    // Before the answer is shown a tap anywhere shows it, then the sides answer; a hold picks
+    // a word. Buttons consume their touches before this handler can rate the card.
     val tapWith by rememberUpdatedState<(Offset, Long, Float) -> Unit> { position, time, width -> tap(position, time, width) }
     val holdWith by rememberUpdatedState<(Offset) -> Unit> { hold(it) }
 
@@ -279,7 +298,7 @@ internal fun CardScreen(
                                 while (!ended) {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
                                     when {
-                                        // the card scrolled, or a button on top (Show, Add) took the touch
+                                        // the card scrolled, or a button (Show, Add, Etymology) took the touch
                                         change == null || change.isConsumed -> ended = true
                                         // a swipe (going back, or old habit) is neither a tap nor a hold
                                         (change.position - down.position).getDistance() > viewConfiguration.touchSlop -> ended = true
@@ -344,6 +363,21 @@ internal fun CardScreen(
                     )
                     CardText(card.answer, TextAlign.Start, placements.of(CardPart.ANSWER), held?.rangeIn(CardPart.ANSWER), answerModifier)
                 }
+                if (state.revealed) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                                .onGloballyPositioned { etymologyTop = it.positionInParent().y.roundToInt() },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        EtymologySection(state.etymology, enabled = !state.sending) {
+                            heldWord = null
+                            onEtymology()
+                        }
+                    }
+                }
                 // keeps the last line out of the round screen's narrow bottom
                 Spacer(Modifier.height(screenWidth * if (state.revealed) 0.15f else 0.26f))
             }
@@ -384,6 +418,54 @@ internal fun CardScreen(
             }
 
             flashRating?.let { AnswerFlash(it, flashAlpha.value) }
+        }
+    }
+}
+
+/** Placed after the answer, so the action is reached by scrolling to the end of the card. */
+@Composable
+private fun EtymologySection(
+    state: EtymologyState,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    if (state != EtymologyState.Idle) {
+        Text(stringResource(R.string.etymology), style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+    }
+    when (state) {
+        EtymologyState.Idle ->
+            Button(
+                onClick = onClick,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                label = { Text(stringResource(R.string.etymology)) },
+            )
+        EtymologyState.Loading ->
+            Text(stringResource(R.string.loading_etymology), style = MaterialTheme.typography.bodyMedium)
+        is EtymologyState.Loaded ->
+            Text(
+                state.explanation,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = CondensedFontFamily),
+                textAlign = TextAlign.Start,
+            )
+        is EtymologyState.Failed -> {
+            Text(
+                state.message.asString(),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Start,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onClick,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                label = { Text(stringResource(R.string.retry)) },
+            )
         }
     }
 }

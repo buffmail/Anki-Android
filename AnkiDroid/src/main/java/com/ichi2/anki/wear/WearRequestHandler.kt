@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.jsoup.Jsoup
 import timber.log.Timber
 
 /**
@@ -85,6 +86,9 @@ object WearRequestHandler {
     @VisibleForTesting
     var wordLookup: WordLookup = AnkiNewCardLookup { GeminiApiKey.get(AnkiDroidApp.instance) }
 
+    @VisibleForTesting
+    var etymologyLookup: EtymologyLookup = GeminiEtymologyLookup { GeminiApiKey.get(AnkiDroidApp.instance) }
+
     suspend fun handle(
         path: String,
         payload: ByteArray,
@@ -113,8 +117,28 @@ object WearRequestHandler {
             is WearRequest.Answer -> answer(request)
             WearRequest.Sync -> sync()
             is WearRequest.LookUpWord -> lookUpWord(request)
+            is WearRequest.GetEtymology -> etymology(request)
             is WearRequest.AddWord -> addWord(request)
         }
+
+    private suspend fun etymology(request: WearRequest.GetEtymology): WearResponse {
+        val word =
+            withCol {
+                val question = getCard(request.cardId).renderOutput(this, reload = true).questionText
+                WordCard.normalize(Jsoup.parseBodyFragment(WatchCardFormatter.toWatchHtml(question)).text())
+            }
+        require(word.isNotEmpty() && word.length <= 200) {
+            "Etymology needs a word or short phrase on the front of the card."
+        }
+        // Release the collection before waiting for Gemini, so studying on the phone can continue.
+        val explanation =
+            try {
+                etymologyLookup.lookUp(word)
+            } catch (e: MissingApiKeyException) {
+                return WearResponse.NoApiKey
+            }
+        return WearResponse.Etymology(request.cardId, word, explanation)
+    }
 
     /** Looks [WearRequest.LookUpWord.word] up and says whether it's already in the collection. */
     private suspend fun lookUpWord(request: WearRequest.LookUpWord): WearResponse {

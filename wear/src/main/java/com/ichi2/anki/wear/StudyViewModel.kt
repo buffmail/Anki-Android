@@ -27,7 +27,22 @@ import com.ichi2.anki.wear.protocol.WatchCounts
 import com.ichi2.anki.wear.protocol.WatchRating
 import com.ichi2.anki.wear.protocol.WearRequest
 import com.ichi2.anki.wear.protocol.WearResponse
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+
+sealed interface EtymologyState {
+    data object Idle : EtymologyState
+
+    data object Loading : EtymologyState
+
+    data class Loaded(
+        val explanation: String,
+    ) : EtymologyState
+
+    data class Failed(
+        val message: UiMessage,
+    ) : EtymologyState
+}
 
 sealed interface StudyState {
     data object Loading : StudyState
@@ -41,6 +56,7 @@ sealed interface StudyState {
         val sending: Boolean,
         /** Changes for every card shown, even if the same card comes back (Again). */
         val sequence: Int,
+        val etymology: EtymologyState = EtymologyState.Idle,
     ) : StudyState
 
     data class Finished(
@@ -61,6 +77,7 @@ class StudyViewModel(
 
     private var shownAt = 0L
     private var sequence = 0
+    private var etymologyJob: Job? = null
 
     init {
         reload()
@@ -87,7 +104,43 @@ class StudyViewModel(
         )
     }
 
+    fun loadEtymology() {
+        val current = state as? StudyState.Showing ?: return
+        if (!current.revealed ||
+            current.sending ||
+            current.etymology is EtymologyState.Loading ||
+            current.etymology is EtymologyState.Loaded
+        ) {
+            return
+        }
+        state = current.copy(etymology = EtymologyState.Loading)
+        etymologyJob =
+            viewModelScope.launch {
+                val result =
+                    phone.sendForResult<WearResponse.Etymology>(
+                        WearRequest.GetEtymology(current.card.id),
+                        PhoneClient.LOOKUP_TIMEOUT_MILLIS,
+                    )
+                val latest = state as? StudyState.Showing ?: return@launch
+                // A late reply must never attach to the next card, even if Again brings back the same ID.
+                if (latest.sequence != current.sequence || latest.sending) return@launch
+                val etymology =
+                    result.fold(
+                        onSuccess = {
+                            if (it.cardId == current.card.id) {
+                                EtymologyState.Loaded(it.explanation)
+                            } else {
+                                EtymologyState.Failed(UiMessage.Resource(R.string.error_app_mismatch))
+                            }
+                        },
+                        onFailure = { EtymologyState.Failed(it.uiMessage) },
+                    )
+                state = latest.copy(etymology = etymology)
+            }
+    }
+
     private fun send(request: WearRequest) {
+        etymologyJob?.cancel()
         viewModelScope.launch {
             if (state !is StudyState.Showing) state = StudyState.Loading
             state =

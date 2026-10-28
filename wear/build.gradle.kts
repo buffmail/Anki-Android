@@ -106,6 +106,8 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.junit)
     testImplementation(libs.junit.vintage.engine)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
     testRuntimeOnly(libs.junit.platform.launcher)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
