@@ -17,6 +17,8 @@
 package com.ichi2.anki.wear
 
 import androidx.annotation.VisibleForTesting
+import com.ichi2.anki.CollectionManager.withCol
+import com.ichi2.anki.libanki.CardId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
@@ -33,12 +35,26 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.jsoup.Jsoup
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Looks up a word's origin without changing the card. Replaced with a fake in tests. */
 fun interface EtymologyLookup {
     suspend fun lookUp(word: String): String
+}
+
+/** Read the rendered front, releasing the collection before a network lookup. */
+suspend fun etymologyWord(cardId: CardId): String {
+    val word =
+        withCol {
+            val question = getCard(cardId).renderOutput(this, reload = true).questionText
+            WordCard.normalize(Jsoup.parseBodyFragment(WatchCardFormatter.toWatchHtml(question)).text())
+        }
+    require(word.isNotEmpty() && word.length <= 200) {
+        "Etymology needs a word or short phrase on the front of the card."
+    }
+    return word
 }
 
 /** Calls Gemini on the phone, using the same encrypted key as Add word. */

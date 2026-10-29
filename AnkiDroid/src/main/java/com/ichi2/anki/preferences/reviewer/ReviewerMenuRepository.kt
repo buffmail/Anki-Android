@@ -52,7 +52,13 @@ class ReviewerMenuRepository(
         // Add any menu action that hasn't been configured to its default display type
         for (action in menuActions) {
             if (action !in allConfiguredActions && action.defaultDisplayType in actionsMap) {
-                actionsMap[action.defaultDisplayType]?.add(action)
+                val actions = actionsMap.getValue(action.defaultDisplayType!!)
+                val whiteboardIndex = actions.indexOf(ViewerAction.TOGGLE_WHITEBOARD)
+                if (action == ViewerAction.ETYMOLOGY && whiteboardIndex >= 0) {
+                    actions.add(whiteboardIndex + 1, action)
+                } else {
+                    actions.add(action)
+                }
             }
         }
         return actionsMap

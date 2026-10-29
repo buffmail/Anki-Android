@@ -18,6 +18,9 @@ A minimal watch app (built for Galaxy Watch 7) to study existing decks and add E
   The phone uses your saved Gemini key and shows 2–3 short sentences below the answer, including
   roots and misleading word parts. Loading and errors stay on the card; errors offer **Retry**.
   The explanation is kept for this appearance of the card and does not change the note or schedule
+- On the phone, open the study screen's **⋮ → Etymology** menu, directly below **Toggle whiteboard**,
+  for the same lookup in a dialog. The dialog shows loading, the word origin, and **Retry** on errors.
+  It uses the same saved Gemini key and does not change the card or schedule
 - Back to the deck list after studying: the phone syncs with AnkiWeb, then the counts refresh
 - Text only: images, audio and other media are left out
 - **Add word** (top of the deck list): type, write or say an English word, check its meanings,

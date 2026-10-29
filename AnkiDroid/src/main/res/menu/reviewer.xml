@@ -59,6 +59,10 @@
         android:icon="@drawable/ic_enable_whiteboard"
         ankidroid:showAsAction="never"/>
     <item
+        android:id="@+id/action_etymology"
+        android:title="@string/etymology"
+        ankidroid:showAsAction="never"/>
+    <item
         android:id="@+id/action_flag"
         android:title="@string/menu_flag_card"
         android:icon="@drawable/ic_flag_transparent"

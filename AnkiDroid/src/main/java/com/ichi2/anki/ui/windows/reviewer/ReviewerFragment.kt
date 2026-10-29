@@ -58,6 +58,7 @@ import com.ichi2.anki.R
 import com.ichi2.anki.cardviewer.Gesture
 import com.ichi2.anki.common.utils.android.isRobolectric
 import com.ichi2.anki.databinding.Reviewer2Binding
+import com.ichi2.anki.dialogs.EtymologyDialog
 import com.ichi2.anki.dialogs.tags.TagsDialog
 import com.ichi2.anki.dialogs.tags.TagsDialogFactory
 import com.ichi2.anki.dialogs.tags.TagsDialogListener
@@ -608,6 +609,10 @@ class ReviewerFragment :
         viewModel.setDueDateFlow.collectIn(lifecycleScope) { cardId ->
             val dialogFragment = SetDueDateDialog.newInstance(listOf(cardId))
             showDialogFragment(dialogFragment)
+        }
+
+        viewModel.etymologyFlow.collectIn(lifecycleScope) { cardId ->
+            showDialogFragment(EtymologyDialog.newInstance(cardId))
         }
 
         viewModel.pageUpFlow.flowWithLifecycle(lifecycle).collectIn(lifecycleScope) {

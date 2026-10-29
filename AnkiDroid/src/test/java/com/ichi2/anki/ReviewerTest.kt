@@ -19,6 +19,7 @@ import android.app.Application
 import android.content.Intent
 import android.view.Menu
 import androidx.annotation.CheckResult
+import androidx.appcompat.view.menu.MenuItemImpl
 import androidx.core.content.edit
 import androidx.core.os.BundleCompat
 import androidx.core.view.iterator
@@ -37,6 +38,7 @@ import com.ichi2.anki.cardviewer.ViewerCommand.MARK
 import com.ichi2.anki.common.time.MockTime
 import com.ichi2.anki.common.time.TimeManager
 import com.ichi2.anki.common.utils.annotation.KotlinCleanup
+import com.ichi2.anki.dialogs.EtymologyDialog
 import com.ichi2.anki.libanki.Card
 import com.ichi2.anki.libanki.CardType
 import com.ichi2.anki.libanki.Consts
@@ -52,6 +54,7 @@ import com.ichi2.anki.observability.undoableOp
 import com.ichi2.anki.preferences.PreferenceTestUtils
 import com.ichi2.anki.preferences.sharedPrefs
 import com.ichi2.anki.reviewer.ActionButtonStatus
+import com.ichi2.anki.utils.ext.getCurrentDialogFragment
 import com.ichi2.testutils.common.Flaky
 import com.ichi2.testutils.common.OS
 import junit.framework.TestCase.assertEquals
@@ -173,7 +176,7 @@ class ReviewerTest : RobolectricTest() {
 
         val reviewer = startReviewer(ReviewerForMenuItems::class.java)
 
-        val visibleButtons: List<String> = reviewer.getVisibleButtonNames()
+        val visibleButtons = reviewer.getVisibleButtonNamesExcept(R.id.action_etymology)
 
         assertThat(
             "No menu items should be visible if all are disabled in Settings - Reviewer - App Bar Buttons",
@@ -190,13 +193,36 @@ class ReviewerTest : RobolectricTest() {
 
         toggleWhiteboard(reviewer)
 
-        val visibleButtons = reviewer.getVisibleButtonNamesExcept(R.id.action_toggle_whiteboard)
+        val visibleButtons = reviewer.getVisibleButtonNamesExcept(R.id.action_toggle_whiteboard, R.id.action_etymology)
 
         assertThat(
             "No menu items should be visible if all are disabled in Settings - Reviewer - App Bar Buttons",
             visibleButtons,
             empty(),
         )
+    }
+
+    @Test
+    fun `etymology stays in overflow below whiteboard and opens a separate dialog`() {
+        addBasicNote("wardrobe", "a cabinet for clothes")
+        val reviewer = startReviewer(ReviewerForMenuItems::class.java)
+        val menu = reviewer.menu!!
+        val items = (0 until menu.size()).map(menu::getItem)
+        val whiteboardIndex = items.indexOfFirst { it.itemId == R.id.action_toggle_whiteboard }
+        val etymology = items[whiteboardIndex + 1] as MenuItemImpl
+
+        assertEquals(R.id.action_etymology, etymology.itemId)
+        assertTrue(etymology.isVisible)
+        assertFalse(etymology.requiresActionButton())
+        assertFalse(etymology.requestsActionButton())
+
+        val before = reviewer.currentCard!!.toBackendCard()
+        reviewer.onOptionsItemSelected(etymology)
+        advanceRobolectricLooper()
+
+        assertNotNull("Etymology should open in a dialog", reviewer.getCurrentDialogFragment<EtymologyDialog>())
+        assertEquals(before, reviewer.currentCard!!.toBackendCard())
+        assertFalse(reviewer.isDisplayingAnswer)
     }
 
     @Test

@@ -70,6 +70,7 @@ import com.ichi2.anki.cardviewer.Gesture
 import com.ichi2.anki.cardviewer.ViewerCommand
 import com.ichi2.anki.common.annotations.NeedsTest
 import com.ichi2.anki.common.time.TimeManager
+import com.ichi2.anki.dialogs.EtymologyDialog
 import com.ichi2.anki.libanki.Card
 import com.ichi2.anki.libanki.CardId
 import com.ichi2.anki.libanki.Collection
@@ -521,6 +522,9 @@ open class Reviewer :
             R.id.action_toggle_whiteboard -> {
                 toggleWhiteboard()
             }
+            R.id.action_etymology -> {
+                currentCard?.let { showDialogFragment(EtymologyDialog.newInstance(it.id)) }
+            }
             R.id.action_open_deck_options -> {
                 Timber.i("Reviewer:: Opening deck options")
                 val i =
@@ -837,6 +841,7 @@ open class Reviewer :
         menu.findItem(R.id.action_flag).subMenu?.let { subMenu -> setupFlags(subMenu) }
         displayIcons(menu)
         actionButtons.setCustomButtonsStatus(menu)
+        menu.findItem(R.id.action_etymology).isEnabled = currentCard != null
         val alpha = Themes.ALPHA_ICON_ENABLED_LIGHT
         val markCardIcon = menu.findItem(R.id.action_mark_card)
         if (currentCard != null && isMarked(getColUnsafe, currentCard!!.note(getColUnsafe))) {

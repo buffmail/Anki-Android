@@ -56,7 +56,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.jsoup.Jsoup
 import timber.log.Timber
 
 /**
@@ -122,14 +121,7 @@ object WearRequestHandler {
         }
 
     private suspend fun etymology(request: WearRequest.GetEtymology): WearResponse {
-        val word =
-            withCol {
-                val question = getCard(request.cardId).renderOutput(this, reload = true).questionText
-                WordCard.normalize(Jsoup.parseBodyFragment(WatchCardFormatter.toWatchHtml(question)).text())
-            }
-        require(word.isNotEmpty() && word.length <= 200) {
-            "Etymology needs a word or short phrase on the front of the card."
-        }
+        val word = etymologyWord(request.cardId)
         // Release the collection before waiting for Gemini, so studying on the phone can continue.
         val explanation =
             try {

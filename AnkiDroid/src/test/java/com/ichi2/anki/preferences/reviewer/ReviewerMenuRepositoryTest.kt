@@ -35,6 +35,25 @@ class ReviewerMenuRepositoryTest {
         repository = ReviewerMenuRepository(prefs)
     }
 
+    @Test
+    fun `etymology defaults to overflow immediately below whiteboard`() {
+        val actions = repository.getActionsByMenuDisplayTypes()
+        val overflow = actions.getValue(MenuDisplayType.MENU_ONLY)
+        assertEquals(ViewerAction.ETYMOLOGY, overflow[overflow.indexOf(ViewerAction.TOGGLE_WHITEBOARD) + 1])
+        assertThat(actions.getValue(MenuDisplayType.ALWAYS).filter { it == ViewerAction.ETYMOLOGY }, empty())
+    }
+
+    @Test
+    fun `etymology is inserted below whiteboard in an existing menu configuration`() {
+        repository.setDisplayTypeActions(
+            alwaysShowActions = listOf(ViewerAction.UNDO),
+            menuOnlyActions = listOf(ViewerAction.TOGGLE_WHITEBOARD, ViewerAction.EDIT),
+            disabledActions = emptyList(),
+        )
+        val overflow = repository.getActionsByMenuDisplayTypes().getValue(MenuDisplayType.MENU_ONLY)
+        assertEquals(listOf(ViewerAction.TOGGLE_WHITEBOARD, ViewerAction.ETYMOLOGY, ViewerAction.EDIT), overflow.take(3))
+    }
+
     // commas can't be part of an enum object name, so they are safe as separators.
     // This test serves as a safeguard against changes in the separator, which would need
     // a preference upgrade

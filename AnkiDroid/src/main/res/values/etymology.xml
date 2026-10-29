@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="etymology" maxLength="28">Etymology</string>
+    <string name="loading_etymology">Looking up word origin…</string>
+    <string name="etymology_no_api_key">Set your Gemini API key in Settings → Advanced → Watch → Gemini API key, then try again.</string>
+    <string name="etymology_invalid_card">Etymology needs a word or short phrase on the front of the card.</string>
+    <string name="etymology_failed">Couldn\'t look up the word origin. Try again.</string>
+</resources>

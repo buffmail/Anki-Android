@@ -63,6 +63,7 @@ enum class ViewerAction(
     SUSPEND_MENU(R.id.action_suspend, R.drawable.ic_suspend, R.string.menu_suspend, MENU_ONLY),
     DELETE(R.id.action_delete, R.drawable.ic_delete_white, R.string.menu_delete_note, MENU_ONLY),
     TOGGLE_WHITEBOARD(R.id.action_toggle_whiteboard, R.drawable.ic_enable_whiteboard, R.string.gesture_toggle_whiteboard, MENU_ONLY),
+    ETYMOLOGY(R.id.action_etymology, R.drawable.ic_dialog_info, R.string.etymology, MENU_ONLY),
 
     // Disabled
     BROWSE(R.id.action_browse, R.drawable.ic_flashcard_black, R.string.empty_string, DISABLED),
@@ -219,6 +220,7 @@ enum class ViewerAction(
             EXIT,
             RESCHEDULE_NOTE,
             TOGGLE_WHITEBOARD,
+            ETYMOLOGY,
             PAGE_UP,
             PAGE_DOWN,
             USER_ACTION_1,
