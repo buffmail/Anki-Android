@@ -73,6 +73,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
@@ -372,7 +373,12 @@ internal fun CardScreen(
                                 .onGloballyPositioned { etymologyTop = it.positionInParent().y.roundToInt() },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        EtymologySection(state.etymology, enabled = !state.sending) {
+                        EtymologySection(
+                            state.etymology,
+                            enabled = !state.sending,
+                            placed = placements.of(CardPart.ETYMOLOGY),
+                            highlight = held?.rangeIn(CardPart.ETYMOLOGY),
+                        ) {
                             heldWord = null
                             onEtymology()
                         }
@@ -427,6 +433,8 @@ internal fun CardScreen(
 private fun EtymologySection(
     state: EtymologyState,
     enabled: Boolean,
+    placed: PlacedText,
+    highlight: TextRange?,
     onClick: () -> Unit,
 ) {
     if (state != EtymologyState.Idle) {
@@ -445,11 +453,12 @@ private fun EtymologySection(
         EtymologyState.Loading ->
             Text(stringResource(R.string.loading_etymology), style = MaterialTheme.typography.bodyMedium)
         is EtymologyState.Loaded ->
-            Text(
-                state.explanation,
-                modifier = Modifier.fillMaxWidth(),
+            WordSelectableText(
+                base = AnnotatedString(state.explanation),
+                placed = placed,
+                highlight = highlight,
                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = CondensedFontFamily),
-                textAlign = TextAlign.Start,
+                align = TextAlign.Start,
             )
         is EtymologyState.Failed -> {
             Text(
@@ -560,8 +569,8 @@ private fun AddWordLabel(word: String) {
     )
 }
 
-/** The question or the answer: the two pieces of card text a word can be held in. */
-private enum class CardPart { QUESTION, ANSWER }
+/** The pieces of study text a word can be held in. */
+private enum class CardPart { QUESTION, ANSWER, ETYMOLOGY }
 
 /** A word held on the card: where it is, to highlight it, and the word itself. */
 private data class HeldWord(
@@ -636,6 +645,25 @@ private fun CardText(
     modifier: Modifier = Modifier,
 ) {
     val base = remember(html) { AnnotatedString.fromHtml(html) }
+    val style =
+        if (base.length <= 40) {
+            MaterialTheme.typography.titleLarge
+        } else {
+            MaterialTheme.typography.bodyLarge.copy(fontFamily = CondensedFontFamily)
+        }
+    WordSelectableText(base, align, placed, highlight, style, modifier)
+}
+
+/** Text registered for word hit testing, with the held word highlighted. */
+@Composable
+private fun WordSelectableText(
+    base: AnnotatedString,
+    align: TextAlign,
+    placed: PlacedText,
+    highlight: TextRange?,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+) {
     val highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
     val text =
         when {
@@ -648,12 +676,6 @@ private fun CardText(
                         addStyle(SpanStyle(background = highlightColor), highlight.start, highlight.end)
                     }
                 }
-        }
-    val style =
-        if (base.length <= 40) {
-            MaterialTheme.typography.titleLarge
-        } else {
-            MaterialTheme.typography.bodyLarge.copy(fontFamily = CondensedFontFamily)
         }
     Text(
         text = text,

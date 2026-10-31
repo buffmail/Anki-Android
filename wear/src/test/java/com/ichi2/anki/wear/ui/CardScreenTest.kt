@@ -211,6 +211,41 @@ class CardScreenTest {
     }
 
     @Test
+    fun `holding a word in the etymology offers to add it without rating the card`() {
+        val explanation = "French origin"
+        state = state.copy(revealed = true, etymology = EtymologyState.Loaded(explanation))
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText(explanation).performScrollTo().performTouchInput {
+            longClick(Offset(width * 0.1f, height / 2f))
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("Add French").assertIsDisplayed().performClick()
+
+        assertEquals(listOf("French"), addedWords)
+        assertEquals(emptyList<WatchRating>(), answers)
+        assertEquals(0, reveals)
+        assertEquals(0, etymologyRequests)
+    }
+
+    @Test
+    fun `a tap dismisses a word held in the etymology without rating the card`() {
+        val explanation = "French origin"
+        state = state.copy(revealed = true, etymology = EtymologyState.Loaded(explanation))
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText(explanation).performScrollTo().performTouchInput {
+            longClick(Offset(width * 0.1f, height / 2f))
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("Add French").assertIsDisplayed()
+
+        tapAt(0.9f)
+
+        compose.onAllNodesWithText("Add", substring = true).assertCountEquals(0)
+        assertEquals(emptyList<WatchRating>(), answers)
+        assertEquals(emptyList<String>(), addedWords)
+    }
+
+    @Test
     fun `holding where there's no word does nothing`() {
         tapAt(0.5f)
         compose.mainClock.advanceTimeBy(1_000)
