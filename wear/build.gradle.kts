@@ -26,6 +26,7 @@ android {
                 .toInt()
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -110,4 +111,10 @@ dependencies {
     testImplementation(libs.mockk)
     testRuntimeOnly(libs.junit.platform.launcher)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Run the real study UI on a local round Wear OS emulator, without a paired phone.
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

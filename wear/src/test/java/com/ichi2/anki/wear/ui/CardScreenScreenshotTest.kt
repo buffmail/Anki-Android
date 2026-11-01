@@ -26,12 +26,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.wear.compose.material3.MaterialTheme
 import com.ichi2.anki.wear.EtymologyState
@@ -57,6 +60,38 @@ import org.robolectric.annotation.GraphicsMode
 class CardScreenScreenshotTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun `vocabulary example is blue bold and larger than its definition`() {
+        // WatchCardFormatter translates the saved anki-example span to these supported tags.
+        val example = "She felt a wave of dismay at the news."
+        val answer =
+            """<font color="#4FC3F7"><b><big>$example</big></b></font>""" +
+                "<br>consternation and distress, typically that caused by something unexpected."
+        val card = WatchCard(1, "dismay", answer, false, "<1m", "1d", WatchQueue.NEW)
+        val state = StudyState.Showing("English", WatchCounts(1, 0, 0), card, true, false, 1)
+        compose.setContent {
+            MaterialTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    CardScreen(state, onReveal = {}, onAnswer = {})
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+
+        val text =
+            compose
+                .onNodeWithText(example, substring = true)
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.Text]
+                .single()
+        val exampleStyles = text.spanStyles.filter { it.start == 0 && it.end == example.length }
+        assertTrue(exampleStyles.any { it.item.color == Color(0xFF4FC3F7) })
+        assertTrue(exampleStyles.any { it.item.fontWeight == FontWeight.Bold })
+        assertTrue(exampleStyles.any { it.item.fontSize == 1.25.em })
+        assertTrue(text.spanStyles.none { it.end > example.length })
+        saveRoundScreenshot(compose.drawWindow(), "card-dismay-example.png")
+    }
 
     @Test
     fun `etymology button and explanation fit the round screen`() {

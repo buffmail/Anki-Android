@@ -29,7 +29,8 @@ import org.jsoup.safety.Safelist
  * Wear OS has no WebView, so the watch renders text with `AnnotatedString.fromHtml`. This
  * keeps text and basic formatting (bold, italic, underline, lists, line breaks), highlights
  * cloze deletions, and drops everything else: CSS, scripts, media, inline colors (they are
- * usually picked for a light background) and hidden elements.
+ * usually picked for a light background) and hidden elements. Vocabulary examples marked
+ * `anki-example` get watch-friendly color, weight and size instead of their inline CSS.
  */
 object WatchCardFormatter {
     data class FormattedCard(
@@ -41,6 +42,9 @@ object WatchCardFormatter {
 
     /** Light blue, readable on the watch's black background. */
     const val CLOZE_COLOR = "#4FC3F7"
+
+    /** Examples stand out against the regular white definitions on the black watch screen. */
+    const val EXAMPLE_COLOR = "#4FC3F7"
 
     /** Wear OS messages are limited to ~100KB. */
     private const val MAX_LENGTH = 30_000
@@ -94,6 +98,17 @@ object WatchCardFormatter {
                 bold.appendChild(child)
             }
             cloze.replaceWith(highlight)
+        }
+
+        // CSS is stripped, but the vocabulary card's semantic marker survives until here.
+        // Translate it to tags supported by AnnotatedString.fromHtml on the watch.
+        for (example in body.select(".anki-example")) {
+            val highlight = Element("font").attr("color", EXAMPLE_COLOR)
+            val text = highlight.appendElement("b").appendElement("big")
+            for (child in example.childNodes().toList()) {
+                text.appendChild(child)
+            }
+            example.replaceWith(highlight)
         }
 
         // Tables are flattened: keep cells apart and rows on their own line.

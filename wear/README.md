@@ -14,6 +14,9 @@ A minimal watch app (built for Galaxy Watch 7) to study existing decks and add E
 - While studying, the word is centered and the meanings are left-aligned, in the watch's
   condensed font so more fits on screen. The top of the screen shows how many cards are left
   today, with no clock
+- Vocabulary examples marked `anki-example` (from the website or `anki --add`) appear in
+  light blue, bold and one size larger; definitions stay regular white text. This works with
+  existing notes without changing their contents or scheduling
 - After showing the answer, scroll to the end and tap **Etymology** for a brief word origin.
   The phone uses your saved Gemini key and shows 2–3 short sentences below the answer, including
   roots and misleading word parts. Loading and errors stay on the card; errors offer **Retry**.
@@ -120,6 +123,28 @@ adb -s <ip>:<port> install -r wear/build/outputs/apk/release/wear-release.apk
 # or, if built with Android Studio's "Generate Signed APK":
 adb -s <ip>:<port> install -r wear/release/wear-release.apk
 ```
+
+## Local emulator checks
+
+Use a round Wear OS emulator at **432 × 432 px, 320 dpi** for the Galaxy Watch 7 40mm
+layout. The local AVD `Galaxy_Watch_7_40mm_API_34` uses Wear OS 5 (API 34). This matches
+the display configuration, not Samsung's One UI firmware.
+
+`VocabularyCardDeviceTest` runs the production study screen with local vocabulary fixtures,
+without a paired phone, Anki account or collection. It checks example styling, scrolling,
+and holding words in both examples and definitions without rating a card.
+
+```sh
+# Explicitly select the emulator so tests never install onto a connected physical watch.
+ANDROID_SERIAL=emulator-5560 ./gradlew :wear:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.ichi2.anki.wear.ui.VocabularyCardDeviceTest
+```
+
+Gradle retrieves `dismay-example.png` and `dismay-definition.png` at the actual display resolution
+under `wear/build/outputs/connected_android_test_additional_output/` before removing the test app.
+Validate these and the phone's `WatchCardFormatterTest` before installing the final release
+on physical devices. Example styling is translated on the phone, so that change requires
+an updated phone app; it does not require rewriting notes or a new watch app.
 
 ## Troubleshooting
 

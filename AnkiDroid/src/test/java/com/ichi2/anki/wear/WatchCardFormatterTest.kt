@@ -17,6 +17,7 @@
 package com.ichi2.anki.wear
 
 import com.ichi2.anki.wear.WatchCardFormatter.CLOZE_COLOR
+import com.ichi2.anki.wear.WatchCardFormatter.EXAMPLE_COLOR
 import com.ichi2.anki.wear.WatchCardFormatter.toWatchHtml
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -58,6 +59,20 @@ class WatchCardFormatterTest {
     @Test
     fun `user colors and inline styles are dropped`() {
         assertEquals("""xy""", toWatchHtml("""<font color="black">x</font><span style="color: black">y</span>"""))
+    }
+
+    @Test
+    fun `vocabulary examples stand out from definitions without changing their text`() {
+        val html =
+            """<span class="anki-example" style="color: #268bd2; font-weight: bold; font-size: 1.125em;">She felt dismay.</span>""" +
+                "<br>distress caused by something unexpected.<br><br>" +
+                """<span class="anki-example">The news dismayed them.</span><br>to distress someone greatly."""
+        assertEquals(
+            """<font color="$EXAMPLE_COLOR"><b><big>She felt dismay.</big></b></font>""" +
+                "<br>distress caused by something unexpected.<br><br>" +
+                """<font color="$EXAMPLE_COLOR"><b><big>The news dismayed them.</big></b></font><br>to distress someone greatly.""",
+            toWatchHtml(html),
+        )
     }
 
     @Test
